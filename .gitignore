@@ -19,8 +19,6 @@ db.sqlite3-journal
 # Media and Static Files
 media/
 staticfiles/
-assets/
-/static/
 
 # Research Archive
 research_archive/
