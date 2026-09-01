@@ -29,5 +29,5 @@ RUN SECRET_KEY=dummy-key-for-build python manage.py collectstatic --noinput
 # Expose port 8000
 EXPOSE 8000
 
-# Start the application using Gunicorn
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "120"]
+# Start the application: Run database migrations then start Gunicorn
+CMD ["sh", "-c", "python manage.py migrate --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120"]
