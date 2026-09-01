@@ -1,0 +1,319 @@
+{% extends 'analyzer/base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>{{ contract.original_filename }}</h2>
+    <form method="post" action="{% url 'analyze_contract' contract.id %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary" {% if contract.extraction_status != 'completed' %}disabled{% endif %}>
+            {% if contract.latest_analysis %}Rerun Analysis{% else %}Analyze Contract{% endif %}
+        </button>
+    </form>
+</div>
+
+{% if not contract.latest_analysis %}
+    <div class="alert alert-info">
+        <i class="fa-solid fa-circle-info me-2"></i> Document uploaded and text extracted ({{ contract.page_count }} pages). Click "Analyze Contract" to run the NLP model.
+    </div>
+{% else %}
+    <!-- Tabs Navigation -->
+    <ul class="nav nav-tabs mb-4" id="analysisTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab">Overview</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary" type="button" role="tab">Summary</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="clauses-tab" data-bs-toggle="tab" data-bs-target="#clauses" type="button" role="tab">Clauses ({{ contract.latest_analysis.clauses_detected }})</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="risk-tab" data-bs-toggle="tab" data-bs-target="#risk" type="button" role="tab">Risk Analysis</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="text-tab" data-bs-toggle="tab" data-bs-target="#text" type="button" role="tab">Contract Text</button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="analysisTabsContent">
+        
+        <!-- OVERVIEW TAB -->
+        <div class="tab-pane fade show active" id="overview" role="tabpanel">
+            <div class="row">
+                <div class="col-md-4 mb-4">
+                    <div class="glass-panel h-100 text-center">
+                        <div class="card-body p-4 p-md-5 py-5">
+                            <h5 class="text-muted text-uppercase mb-3">CONTRACT RISK</h5>
+                            {% if contract.latest_analysis.risk_level == 'High' %}
+                                <div class="mb-2"><i class="fa-solid fa-circle-exclamation text-danger fa-4x"></i></div>
+                                <h2 class="risk-high display-4 mb-0">HIGH</h2>
+                            {% elif contract.latest_analysis.risk_level == 'Medium' %}
+                                <div class="mb-2"><i class="fa-solid fa-triangle-exclamation text-warning fa-4x"></i></div>
+                                <h2 class="risk-medium display-4 mb-0">MEDIUM</h2>
+                            {% else %}
+                                <div class="mb-2"><i class="fa-solid fa-shield-check text-success fa-4x"></i></div>
+                                <h2 class="risk-low display-4 mb-0">LOW</h2>
+                            {% endif %}
+                            <div class="mt-3">
+                                <span class="badge bg-secondary fs-6">Risk Score: {{ contract.latest_analysis.total_score }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-8 mb-4">
+                    <div class="glass-panel h-100">
+                        <div class="card-body p-4 p-md-5">
+                            <h5 class="mb-3 text-primary"><i class="fa-solid fa-chart-pie me-2"></i>Analysis Metrics</h5>
+                            <hr>
+                            <div class="row mb-3">
+                                <div class="col-sm-4 text-muted">Pages Analyzed:</div>
+                                <div class="col-sm-8 fw-bold">{{ contract.latest_analysis.pages_analyzed }}</div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-sm-4 text-muted">Clauses Detected:</div>
+                                <div class="col-sm-8 fw-bold">{{ contract.latest_analysis.clauses_detected }}</div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-sm-4 text-muted">Model Version:</div>
+                                <div class="col-sm-8"><span class="badge bg-light text-dark border">{{ contract.latest_analysis.model_version }}</span></div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-sm-4 text-muted">Run Date:</div>
+                                <div class="col-sm-8">{{ contract.latest_analysis.created_at|date:"Y-m-d H:i" }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {% if contract.summary %}
+            <div class="glass-panel mb-4">
+                <div class="card-body p-4 p-md-5">
+                    <h5 class="card-title"><i class="fa-solid fa-file-lines me-2"></i>Summary Preview</h5>
+                    <p class="card-text fs-5 mt-3">{{ contract.summary.overview }}</p>
+                    <button class="btn btn-outline-primary btn-sm mt-2" onclick="document.getElementById('summary-tab').click()">View Full Summary</button>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- SUMMARY TAB -->
+        <div class="tab-pane fade" id="summary" role="tabpanel">
+            <div class="alert alert-warning mb-4">
+                <strong><i class="fa-solid fa-triangle-exclamation me-2"></i>Disclaimer:</strong> This summary is automatically generated from the uploaded contract. It may omit important details and is not legal advice. Review the original contract and consult a qualified lawyer for legal decisions.
+            </div>
+            
+            {% if contract.summary %}
+            <div class="glass-panel">
+                <div class="card-body p-4 p-md-5">
+                    <h4 class="mb-4">Contract Summary</h4>
+                    
+                    <div class="mb-4">
+                        <h6 class="text-uppercase text-muted fw-bold">Overview</h6>
+                        <p class="fs-5">{{ contract.summary.overview }}</p>
+                    </div>
+                    <hr>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-4">
+                            <h6 class="text-uppercase text-muted fw-bold">Contract Type</h6>
+                            <p>{{ contract.summary.contract_type }}</p>
+                        </div>
+                        <div class="col-md-6 mb-4">
+                            <h6 class="text-uppercase text-muted fw-bold">Parties</h6>
+                            {% if contract.summary.parties %}
+                                <ul class="list-unstyled">
+                                {% for p in contract.summary.parties %}<li><i class="fa-solid fa-check text-success me-2"></i>{{ p }}</li>{% endfor %}
+                                </ul>
+                            {% else %}
+                                <p class="text-muted">Not clearly identified in the extracted text.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-4">
+                            <h6 class="text-uppercase text-muted fw-bold">Key Obligations</h6>
+                            {% if contract.summary.key_obligations %}
+                                <ul class="list-unstyled">
+                                {% for item in contract.summary.key_obligations %}<li><i class="fa-solid fa-handshake text-primary me-2"></i>{{ item }}</li>{% endfor %}
+                                </ul>
+                            {% else %}
+                                <p class="text-muted">Not clearly identified.</p>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-4">
+                            <h6 class="text-uppercase text-muted fw-bold">Key Restrictions</h6>
+                            {% if contract.summary.key_restrictions %}
+                                <ul class="list-unstyled">
+                                {% for item in contract.summary.key_restrictions %}<li><i class="fa-solid fa-ban text-danger me-2"></i>{{ item }}</li>{% endfor %}
+                                </ul>
+                            {% else %}
+                                <p class="text-muted">Not clearly identified.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    <details>
+                        <summary>Financial & Term Details (Payment, Duration, Renewal)</summary>
+                        <div class="row px-3 mt-3">
+                            <div class="col-md-4">
+                                <strong>Payment Terms</strong><br>
+                                {% if contract.summary.payment_terms %}{{ contract.summary.payment_terms|join:", " }}{% else %}Not clearly identified.{% endif %}
+                            </div>
+                            <div class="col-md-4">
+                                <strong>Term and Renewal</strong><br>
+                                {% if contract.summary.term_and_renewal %}{{ contract.summary.term_and_renewal|join:", " }}{% else %}Not clearly identified.{% endif %}
+                            </div>
+                            <div class="col-md-4">
+                                <strong>Important Dates</strong><br>
+                                {% if contract.summary.important_dates %}{{ contract.summary.important_dates|join:", " }}{% else %}Not clearly identified.{% endif %}
+                            </div>
+                        </div>
+                    </details>
+                    
+                    <details>
+                        <summary>Legal Protections (Liability, IP, Confidentiality)</summary>
+                        <div class="row px-3 mt-3">
+                            <div class="col-md-4">
+                                <strong>Liability & Insurance</strong><br>
+                                {% if contract.summary.liability_terms %}{{ contract.summary.liability_terms|join:", " }}{% endif %}
+                                {% if contract.summary.insurance_terms %}, {{ contract.summary.insurance_terms|join:", " }}{% endif %}
+                                {% if not contract.summary.liability_terms and not contract.summary.insurance_terms %}Not clearly identified.{% endif %}
+                            </div>
+                            <div class="col-md-4">
+                                <strong>Intellectual Property</strong><br>
+                                {% if contract.summary.intellectual_property_terms %}{{ contract.summary.intellectual_property_terms|join:", " }}{% else %}Not clearly identified.{% endif %}
+                            </div>
+                            <div class="col-md-4">
+                                <strong>Termination & Disputes</strong><br>
+                                {% if contract.summary.termination_terms %}{{ contract.summary.termination_terms|join:", " }}{% endif %}
+                                {% if contract.summary.governing_law_terms %}, {{ contract.summary.governing_law_terms|join:", " }}{% endif %}
+                                {% if not contract.summary.termination_terms and not contract.summary.governing_law_terms %}Not clearly identified.{% endif %}
+                            </div>
+                        </div>
+                    </details>
+                    
+                    <div class="mt-5">
+                        <h6 class="text-uppercase text-muted fw-bold">Notable Risks</h6>
+                        {% if contract.summary.notable_risks %}
+                            {% for r in contract.summary.notable_risks %}
+                                <span class="badge bg-danger mb-1">{{ r }}</span>
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-muted">None detected.</p>
+                        {% endif %}
+                    </div>
+
+                    {% if contract.summary.evidence.exists %}
+                    <div class="mt-5">
+                        <h6 class="text-uppercase text-muted fw-bold">Summary Evidence Links</h6>
+                        <ul class="list-group list-group-flush">
+                        {% for ev in contract.summary.evidence.all %}
+                            <li class="list-group-item bg-light border-0 mb-2 rounded">
+                                <strong>{{ ev.section_name }}</strong> (Page {{ ev.page_number }})
+                                <div class="text-muted small mt-1">"{{ ev.text|truncatechars:150 }}"</div>
+                            </li>
+                        {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+
+                </div>
+            </div>
+            {% else %}
+                <p>Summary not generated for this analysis.</p>
+            {% endif %}
+        </div>
+
+        <!-- CLAUSES TAB -->
+        <div class="tab-pane fade" id="clauses" role="tabpanel">
+            {% if contract.latest_analysis.detected_clauses.exists %}
+                {% for clause in contract.latest_analysis.detected_clauses.all|dictsortreversed:"risk_weight" %}
+                    <details>
+                        <summary>
+                            <span class="fw-bold">{{ clause.display_name }}</span>
+                            <span class="ms-auto badge {% if clause.risk_level == 'High' %}bg-danger{% elif clause.risk_level == 'Medium' %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                                Risk: {{ clause.risk_level }}
+                            </span>
+                            <span class="ms-2 badge bg-secondary">Pages: {{ clause.pages|join:", " }}</span>
+                        </summary>
+                        <div class="px-3 pt-2">
+                            <p class="text-muted small mb-2">Evidence Chunks:</p>
+                            {% for ev in clause.evidence.all %}
+                                <div class="evidence-box">
+                                    <div class="fw-bold mb-1 border-bottom pb-1">Page {{ ev.page_number }}</div>
+                                    {{ ev.text }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </details>
+                {% endfor %}
+            {% else %}
+                <div class="alert alert-secondary">
+                    No supported contractual clauses were confidently detected. This does not mean the contract has no legal risks.
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- RISK ANALYSIS TAB -->
+        <div class="tab-pane fade" id="risk" role="tabpanel">
+            <div class="glass-panel">
+                <div class="card-body p-4 p-md-5">
+                    <h4 class="mb-4">Why is this contract {{ contract.latest_analysis.risk_level|lower }} risk?</h4>
+                    <p class="text-muted">The score is based on predefined project-specific heuristic weights assigned to detected clauses. This is not legal advice.</p>
+                    
+                    <div class="table-responsive mt-4">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Clause</th>
+                                    <th>Risk Contribution</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for clause in contract.latest_analysis.detected_clauses.all|dictsortreversed:"risk_weight" %}
+                                    {% if clause.risk_weight > 0 %}
+                                    <tr>
+                                        <td>{{ clause.display_name }}</td>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="progress flex-grow-1 me-3" style="height: 10px;">
+                                                    <div class="progress-bar {% if clause.risk_weight >= 3 %}bg-danger{% elif clause.risk_weight >= 2 %}bg-warning{% else %}bg-success{% endif %}" role="progressbar" style="width: {{ clause.risk_weight|add:"0"|stringformat:"f"|slice:":-7" }}0%;"></div>
+                                                </div>
+                                                <span class="fw-bold">+{{ clause.risk_weight }}</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endif %}
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-light">
+                                <tr>
+                                    <td class="fw-bold text-end">Total Score:</td>
+                                    <td class="fw-bold">{{ contract.latest_analysis.total_score }}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TEXT TAB -->
+        <div class="tab-pane fade" id="text" role="tabpanel">
+            <div class="glass-panel">
+                <div class="card-body text-center py-5">
+                    <i class="fa-regular fa-file-pdf fa-4x text-muted mb-3"></i>
+                    <h4>Review Original Text</h4>
+                    <p class="text-muted">You can inspect the exact text extracted from the PDF.</p>
+                    <a href="{% url 'contract_text' contract.id %}" class="btn btn-outline-primary" target="_blank">Open Text Viewer <i class="fa-solid fa-arrow-up-right-from-square ms-1"></i></a>
+                </div>
+            </div>
+        </div>
+
+    </div>
+{% endif %}
+
+{% endblock %}
