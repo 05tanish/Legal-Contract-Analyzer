@@ -1,0 +1,48 @@
+name: "Standard Mutual NDA Playbook"
+description: "Standard corporate benchmark for evaluating Non-Disclosure Agreements"
+is_default: true
+rules:
+  - category: "Governing Law & Jurisdiction"
+    standard_requirement: "Governing law must be Delaware, California, or New York with exclusive state/federal jurisdiction."
+    unacceptable_triggers:
+      - "foreign jurisdiction"
+      - "english law"
+      - "arbitration in london"
+    severity_if_violated: "HIGH"
+    fallback_recommendation: "Change governing law to Delaware without jury trial waiver."
+
+  - category: "Term & Confidentiality Duration"
+    standard_requirement: "Confidentiality obligations should survive no longer than 2 to 3 years from disclosure (trade secrets excepted)."
+    unacceptable_triggers:
+      - "perpetual"
+      - "indefinite"
+      - "in perpetuity"
+    severity_if_violated: "HIGH"
+    fallback_recommendation: "Limit confidentiality term to three (3) years from date of disclosure; perpetual protection only for verified trade secrets."
+
+  - category: "Non-Solicitation & Non-Compete"
+    standard_requirement: "NDAs must NOT contain non-compete, employee non-solicit, or customer non-solicitation covenants."
+    unacceptable_triggers:
+      - "shall not solicit"
+      - "shall not hire"
+      - "non-compete"
+      - "covenant not to compete"
+    severity_if_violated: "CRITICAL"
+    fallback_recommendation: "Strike all non-solicitation and non-competition covenants in their entirety; such restrictions belong exclusively in definitive commercial agreements."
+
+  - category: "Remedies & Injunctions"
+    standard_requirement: "Injunctive relief may be sought without the necessity of proving actual damages, but bond requirement waiver should be mutual."
+    unacceptable_triggers:
+      - "liquidated damages"
+      - "penalty"
+    severity_if_violated: "MEDIUM"
+    fallback_recommendation: "Remove any liquidated damages penalties; retain equitable injunctive relief upon clear and convincing evidence."
+
+  - category: "Definition of Confidential Information"
+    standard_requirement: "Must require written marking or confirmation of oral disclosures within 30 days, with standard exclusions (public knowledge, prior possession, independent development)."
+    unacceptable_triggers:
+      - "all information disclosed without marking"
+      - "no exclusions"
+    severity_if_violated: "MEDIUM"
+    fallback_recommendation: "Add standard carve-outs for information already in public domain, independently developed, or rightfully obtained from third parties."
+
