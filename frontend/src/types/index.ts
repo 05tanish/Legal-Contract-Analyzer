@@ -1,9 +1,24 @@
 export type RiskSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'ACCEPTABLE';
 
+export type QueryMode = 'CONTRACT_ONLY' | 'LEGAL_ONLY' | 'HYBRID';
+
 export interface ClauseCitation {
   page_number: number;
   section_reference?: string;
   verbatim_text: string;
+}
+
+export interface LegalCitation {
+  citation_type: 'STATUTE_SECTION' | 'COURT_JUDGMENT';
+  act_name?: string;
+  section_number?: string;
+  section_title?: string;
+  case_title?: string;
+  neutral_citation?: string;
+  court_name?: string;
+  principle?: string;
+  official_url?: string;
+  status?: string;
 }
 
 export interface RiskFinding {
@@ -18,6 +33,7 @@ export interface RiskFinding {
   proposed_redline?: string;
   is_verified: boolean;
   confidence_score: number;
+  legal_citations?: LegalCitation[];
 }
 
 export interface AuditReport {
@@ -62,3 +78,29 @@ export interface Playbook {
   is_default: boolean;
 }
 
+export interface ChatQueryResponse {
+  answer: string;
+  mode_used: QueryMode;
+  citations: ClauseCitation[];
+  legal_citations: LegalCitation[];
+  risk_assessment?: {
+    status?: string;
+    enforceability_concern?: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+    statute_consulted?: string;
+  };
+}
+
+export interface LegalSearchHit {
+  legal_id: string;
+  document_type: string;
+  title: string;
+  content: string;
+  score: number;
+  act_name?: string;
+  section_number?: string;
+  case_title?: string;
+  neutral_citation?: string;
+  ratio_decidendi?: string;
+  source_url?: string;
+  status?: string;
+}
