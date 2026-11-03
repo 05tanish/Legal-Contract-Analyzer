@@ -1,12 +1,17 @@
-# LexAI — Enterprise Agentic Legal Contract Intelligence & Redlining Platform
+# LexAI — Legal Contract Intelligence & Indian Legal Research Platform
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React 19](https://img.shields.io/badge/React-19-61DAFB.svg?logo=react&logoColor=black)](https://react.dev)
 [![Qdrant](https://img.shields.io/badge/Qdrant-VectorDB-DC2626.svg?logo=qdrant&logoColor=white)](https://qdrant.tech)
 [![LangGraph](https://img.shields.io/badge/LangGraph-Agentic_State_Machine-blueviolet.svg)](https://langchain-ai.github.io/langgraph/)
+[![Indian Legal Corpus](https://img.shields.io/badge/Corpus-Constitution_&_Central_Acts-007ACC.svg)](https://www.indiacode.nic.in)
 [![RAGAS Evaluation](https://img.shields.io/badge/RAGAS-Context_Precision_0.89-green.svg)](https://docs.ragas.io)
 [![Docker](https://img.shields.io/badge/Docker_Compose-Multi--Container-2496ED.svg?logo=docker&logoColor=white)](https://docker.com)
 
-A production-grade, full-stack **Legal Contract Intelligence Platform** inspired by **Harvey AI** and **Ironclad**. Built to autonomously ingest complex commercial contracts (NDAs, MSAs, SaaS agreements), execute high-precision **Hybrid Search (Dense + BM25)** with **Cross-Encoder Re-ranking**, audit clauses against corporate compliance playbooks using **LangGraph**, and generate side-by-side **contract redlines with zero-hallucination citation grounding**.
+A production-grade, full-stack **Legal Contract Intelligence & Indian Legal Research Platform** inspired by **Harvey AI** and **Ironclad**. Built to support three core legal workflows:
+
+1. **Contract-Only Analysis:** Ingest commercial agreements (NDAs, MSAs, SaaS terms), extract structured clauses with verbatim citations, and audit against corporate playbooks.
+2. **Indian Legal Research:** Query the **Constitution of India (Articles 12–35)**, **Indian Contract Act, 1872**, **Arbitration and Conciliation Act, 1996**, and **landmark Supreme Court decisions** with neutral citations and official Bare Act links.
+3. **Hybrid Contract & Legal Analysis:** Compare contract clauses directly against Indian statutory provisions and judicial precedents (e.g. testing whether post-employment non-compete covenants violate **Section 27** under the *Percept D'Mark v. Zaheer Khan* doctrine).
 
 ---
 
