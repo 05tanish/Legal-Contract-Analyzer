@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertCircle, CheckCircle2, ChevronDown, ChevronUp, MapPin, Shield } from 'lucide-react';
+import { ChevronDown, ChevronUp, MapPin } from 'lucide-react';
 import { RiskFinding, RiskSeverity } from '../../types';
 import { RedlineDiffViewer } from '../redline/RedlineDiffViewer';
 
