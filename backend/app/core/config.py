@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     QDRANT_URL: str = "http://localhost:6333"
     QDRANT_API_KEY: str = ""
     QDRANT_COLLECTION_NAME: str = "legal_contracts"
+    QDRANT_LEGAL_COLLECTION_NAME: str = "indian_legal_corpus"
 
     # Redis / Celery
     REDIS_URL: str = "redis://localhost:6379/0"
