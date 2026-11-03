@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     DEFAULT_FAST_LLM: str = "gpt-4o-mini"
-    DEFAULT_REASONING_LLM: str = "llama-3.3-70b-versatile"
+    DEFAULT_REASONING_LLM: str = "qwen/qwen3.8-27b"
     DEFAULT_EMBEDDING_MODEL: str = "text-embedding-3-large"
     EMBEDDING_DIMENSIONS: int = 1536
 
