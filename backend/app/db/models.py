@@ -1,11 +1,15 @@
 from sqlalchemy import Column, String, Integer, Float, Text, Boolean, DateTime, Date, ForeignKey, JSON
 from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
+from datetime import datetime
 import uuid
 from app.db.session import Base
 
 def generate_uuid():
     return str(uuid.uuid4())
+
+def utc_now():
+    """Return timezone-naive UTC datetime for PostgreSQL compatibility"""
+    return datetime.utcnow()
 
 class Contract(Base):
     __tablename__ = "contracts"
@@ -19,8 +23,8 @@ class Contract(Base):
     contract_type = Column(String(50), default="UNCLASSIFIED") # NDA, MSA, SAAS, EMPLOYMENT
     status = Column(String(30), default="PENDING") # PENDING, PROCESSING, READY, FAILED
     error_message = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     chunks = relationship("ContractChunk", back_populates="contract", cascade="all, delete-orphan")
     audits = relationship("AuditReport", back_populates="contract", cascade="all, delete-orphan")
@@ -49,7 +53,7 @@ class Playbook(Base):
     description = Column(Text, nullable=True)
     rules_json = Column(JSON, nullable=False) # List of audit criteria rules
     is_default = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=utc_now)
 
     audits = relationship("AuditReport", back_populates="playbook")
 
@@ -65,7 +69,7 @@ class AuditReport(Base):
     status = Column(String(30), default="IN_PROGRESS") # IN_PROGRESS, COMPLETED, FAILED
     latency_ms = Column(Float, nullable=True)
     cost_usd = Column(Float, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=utc_now)
 
     contract = relationship("Contract", back_populates="audits")
     playbook = relationship("Playbook", back_populates="audits")
@@ -107,7 +111,7 @@ class LegalStatute(Base):
     commencement_date = Column(Date, nullable=True)
     source_url = Column(String(512), nullable=True)
     status = Column(String(30), default="CURRENT")             # CURRENT, AMENDED, REPEALED
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=utc_now)
 
     sections = relationship("LegalSection", back_populates="statute", cascade="all, delete-orphan")
 
@@ -145,4 +149,4 @@ class CourtJudgment(Base):
     full_text_path = Column(String(512), nullable=True)
     source_url = Column(String(512), nullable=True)
     qdrant_point_id = Column(String(36), nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=utc_now)
