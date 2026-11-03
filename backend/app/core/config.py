@@ -30,8 +30,10 @@ class Settings(BaseSettings):
     # LLM Settings
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
+    GROQ_API_KEY: str = ""
+    GEMINI_API_KEY: str = ""
     DEFAULT_FAST_LLM: str = "gpt-4o-mini"
-    DEFAULT_REASONING_LLM: str = "claude-3-5-sonnet-20241022"
+    DEFAULT_REASONING_LLM: str = "llama-3.3-70b-versatile"
     DEFAULT_EMBEDDING_MODEL: str = "text-embedding-3-large"
     EMBEDDING_DIMENSIONS: int = 1536
 
