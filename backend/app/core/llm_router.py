@@ -2,7 +2,7 @@ import instructor
 from openai import AsyncOpenAI
 from anthropic import AsyncAnthropic
 from app.core.config import settings
-from langfuse.decorators import observe, langfuse_context
+from langfuse import observe
 from langfuse.openai import AsyncOpenAI as AsyncOpenAILangfuse
 import logging
 

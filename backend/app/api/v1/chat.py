@@ -12,6 +12,15 @@ from app.services.rag.legal_search import legal_search_engine
 from app.core.llm_router import llm_router
 from app.core.config import settings
 
+try:
+    from langfuse import observe
+except ImportError:
+    # Fallback if langfuse not installed
+    def observe(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
 router = APIRouter()
 
 def classify_query_intent(query: str, contract_id: Optional[str], requested_mode: Optional[str]) -> str:
@@ -48,16 +57,6 @@ async def query_legal_platform(
     
     Traced with Langfuse for observability.
     """
-    langfuse_context.update_current_trace(
-        name="Legal Contract Query",
-        session_id=payload.contract_id,
-        user_id="demo-user",
-        tags=["legal-analysis", payload.mode or "auto"],
-        metadata={
-            "query_length": len(payload.query),
-            "has_contract": bool(payload.contract_id)
-        }
-    )
     mode = classify_query_intent(payload.query, payload.contract_id, payload.mode)
     has_api_keys = bool(settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("sk-your"))
 

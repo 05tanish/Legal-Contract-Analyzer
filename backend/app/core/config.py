@@ -32,7 +32,6 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     GROQ_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
-    COHERE_API_KEY: str = ""
     DEFAULT_FAST_LLM: str = "gpt-4o-mini"
     DEFAULT_REASONING_LLM: str = "llama-3.3-70b-versatile"
     DEFAULT_EMBEDDING_MODEL: str = "text-embedding-3-large"

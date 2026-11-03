@@ -41,6 +41,11 @@ class QdrantService:
                     field_name="contract_id",
                     field_schema=qmodels.PayloadSchemaType.KEYWORD
                 )
+                self.client.create_payload_index(
+                    collection_name=self.contract_collection,
+                    field_name="is_parent",
+                    field_schema=qmodels.PayloadSchemaType.BOOL
+                )
                 logger.info(f"Initialized Qdrant collection: {self.contract_collection}")
 
             # 2. Indian Legal Knowledge Corpus (Shared across users)

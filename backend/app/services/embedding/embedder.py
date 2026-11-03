@@ -7,21 +7,23 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Lazy import for optional providers
-_cohere_client = None
+_sentence_transformer = None
 
-def _get_cohere_client():
-    """Lazy initialization of Cohere client"""
-    global _cohere_client
-    if _cohere_client is None and settings.COHERE_API_KEY:
+def _get_sentence_transformer():
+    """Lazy initialization of Sentence Transformer model (free, runs locally)"""
+    global _sentence_transformer
+    if _sentence_transformer is None:
         try:
-            import cohere
-            _cohere_client = cohere.Client(settings.COHERE_API_KEY)
-            logger.info("Cohere embedding client initialized")
+            from sentence_transformers import SentenceTransformer
+            # Use all-MiniLM-L6-v2: fast, lightweight, 384 dims, good quality
+            # Will download model on first use (~80MB)
+            _sentence_transformer = SentenceTransformer('all-MiniLM-L6-v2')
+            logger.info("Sentence Transformer model loaded (all-MiniLM-L6-v2)")
         except ImportError:
-            logger.warning("Cohere SDK not installed. Run: pip install cohere")
+            logger.warning("Sentence Transformers not installed. Run: pip install sentence-transformers")
         except Exception as e:
-            logger.warning(f"Failed to initialize Cohere client: {e}")
-    return _cohere_client
+            logger.warning(f"Failed to load Sentence Transformer model: {e}")
+    return _sentence_transformer
 
 class EmbeddingService:
     @staticmethod
@@ -33,43 +35,43 @@ class EmbeddingService:
     async def get_batch_embeddings(texts: List[str]) -> List[List[float]]:
         """
         Generates dense vector representations with multi-provider fallback:
-        1. Try Cohere (free tier: 1M tokens/month, good for legal text)
-        2. Fall back to OpenAI (if Cohere fails)
+        1. Try Sentence Transformers (FREE, runs locally, no API key needed)
+        2. Fall back to OpenAI (if local model fails)
         3. Fall back to deterministic pseudo-embeddings (for testing)
         
-        Cohere embedding model: embed-english-v3.0 (1024 dimensions)
-        OpenAI embedding model: text-embedding-3-large (1536 dimensions)
+        Sentence Transformer model: all-MiniLM-L6-v2 (384 dimensions, ~80MB)
+        OpenAI embedding model: text-embedding-3-large (configurable dimensions)
         """
         
-        # Try Cohere first (free tier available)
-        cohere_client = _get_cohere_client()
-        if cohere_client:
+        # Try Sentence Transformers first (100% free, no API key)
+        model = _get_sentence_transformer()
+        if model:
             try:
-                logger.info(f"Generating embeddings with Cohere for {len(texts)} texts")
-                response = cohere_client.embed(
-                    texts=texts,
-                    model="embed-english-v3.0",
-                    input_type="search_document",  # For indexing documents
-                    embedding_types=["float"]
-                )
-                embeddings = response.embeddings.float
-                logger.info(f"✓ Cohere embeddings generated successfully ({len(embeddings)} vectors)")
+                logger.info(f"Generating embeddings with Sentence Transformers for {len(texts)} texts")
+                # Generate embeddings (returns numpy arrays)
+                embeddings = model.encode(texts, convert_to_tensor=False, show_progress_bar=False)
                 
-                # Pad or truncate to match expected dimensions if needed
+                # Convert to list and handle dimension mismatch
                 target_dim = settings.EMBEDDING_DIMENSIONS
                 result = []
                 for emb in embeddings:
-                    if len(emb) != target_dim:
-                        # Pad with zeros or truncate
-                        if len(emb) < target_dim:
-                            emb = emb + [0.0] * (target_dim - len(emb))
+                    emb_list = emb.tolist() if hasattr(emb, 'tolist') else list(emb)
+                    
+                    # Pad or truncate to match expected dimensions
+                    if len(emb_list) != target_dim:
+                        if len(emb_list) < target_dim:
+                            # Pad with zeros
+                            emb_list = emb_list + [0.0] * (target_dim - len(emb_list))
                         else:
-                            emb = emb[:target_dim]
-                    result.append(emb)
+                            # Truncate
+                            emb_list = emb_list[:target_dim]
+                    result.append(emb_list)
+                
+                logger.info(f"✓ Sentence Transformer embeddings generated successfully ({len(result)} vectors)")
                 return result
                 
             except Exception as e:
-                logger.warning(f"Cohere embeddings failed: {e}. Trying OpenAI fallback...")
+                logger.warning(f"Sentence Transformers failed: {e}. Trying OpenAI fallback...")
         
         # Fallback to OpenAI
         if settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("sk-your"):
