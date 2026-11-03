@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowRight, Check, Copy } from 'lucide-react';
+import { Check, Copy } from 'lucide-react';
 
 interface RedlineDiffViewerProps {
   originalText: string;
