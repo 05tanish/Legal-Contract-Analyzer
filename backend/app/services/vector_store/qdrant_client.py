@@ -118,13 +118,13 @@ class QdrantService:
             ]
         )
 
-        results = self.client.search(
+        results = self.client.query_points(
             collection_name=self.contract_collection,
-            query_vector=query_vector,
+            query=query_vector,
             query_filter=query_filter,
             limit=limit,
             with_payload=True
-        )
+        ).points
 
         return [
             {
@@ -196,13 +196,13 @@ class QdrantService:
 
         query_filter = qmodels.Filter(must=must_conditions) if must_conditions else None
 
-        results = self.client.search(
+        results = self.client.query_points(
             collection_name=self.legal_collection,
-            query_vector=query_vector,
+            query=query_vector,
             query_filter=query_filter,
             limit=limit,
             with_payload=True
-        )
+        ).points
 
         return [
             {
