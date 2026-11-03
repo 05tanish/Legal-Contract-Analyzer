@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Navbar } from './components/layout/Navbar';
 import { SplitPdfViewer } from './components/pdf-viewer/SplitPdfViewer';
 import { AuditScorecard } from './components/audit/AuditScorecard';
@@ -137,14 +137,6 @@ export function App() {
                 </div>
               )}
             </div>
-
-            {/* Collapsible Chat Drawer */}
-            <ContractChatDrawer
-              contractId={selectedContract.id}
-              isOpen={isChatOpen}
-              onClose={() => setIsChatOpen(false)}
-              onSelectCitation={handleSelectCitation}
-            />
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
@@ -153,16 +145,32 @@ export function App() {
             </div>
             <h2 className="text-xl font-bold text-white mb-2">No Contract Selected</h2>
             <p className="text-sm text-slate-400 max-w-md mb-6">
-              Upload a PDF agreement (NDA, MSA, SaaS) to experience layout-aware ingestion, hybrid vector retrieval, and automated redlining.
+              Upload a PDF agreement (NDA, MSA, SaaS) to experience layout-aware ingestion, hybrid vector retrieval, and automated redlining — or open <strong>Legal Copilot & Indian Law</strong> to research statutes and Supreme Court case law.
             </p>
-            <button
-              onClick={() => setIsUploadOpen(true)}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl font-semibold text-sm shadow-lg shadow-indigo-600/30 transition"
-            >
-              Upload First Contract
-            </button>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setIsUploadOpen(true)}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl font-semibold text-sm shadow-lg shadow-indigo-600/30 transition"
+              >
+                Upload First Contract
+              </button>
+              <button
+                onClick={() => setIsChatOpen(true)}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-4 py-2.5 rounded-xl font-semibold text-sm transition"
+              >
+                Open Indian Legal Research
+              </button>
+            </div>
           </div>
         )}
+
+        {/* Collapsible Chat & Research Drawer (Always accessible) */}
+        <ContractChatDrawer
+          contractId={selectedContract?.id || null}
+          isOpen={isChatOpen}
+          onClose={() => setIsChatOpen(false)}
+          onSelectCitation={handleSelectCitation}
+        />
       </main>
 
       {/* Upload Modal */}
