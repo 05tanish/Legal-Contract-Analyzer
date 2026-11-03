@@ -1,4 +1,4 @@
-import { Contract, AuditReport, Playbook, ClauseCitation } from '../types';
+import { Contract, AuditReport, Playbook, ClauseCitation, ChatQueryResponse, QueryMode, LegalSearchHit } from '../types';
 
 const API_BASE = '/api/v1';
 
@@ -54,17 +54,46 @@ export async function fetchPlaybooks(): Promise<Playbook[]> {
   return res.json();
 }
 
-export async function askContract(contractId: string, query: string): Promise<{ answer: string; citations: ClauseCitation[] }> {
+export async function askLegalPlatform(
+  query: string,
+  contractId?: string,
+  mode?: QueryMode
+): Promise<ChatQueryResponse> {
   const res = await fetch(`${API_BASE}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contract_id: contractId, query }),
+    body: JSON.stringify({
+      query,
+      contract_id: contractId || null,
+      mode: mode || null
+    }),
   });
   if (!res.ok) throw new Error('Chat query failed');
+  return res.json();
+}
+
+// Backwards compatibility alias
+export async function askContract(
+  contractId: string,
+  query: string
+): Promise<{ answer: string; citations: ClauseCitation[] }> {
+  const res = await askLegalPlatform(query, contractId, 'CONTRACT_ONLY');
+  return {
+    answer: res.answer,
+    citations: res.citations
+  };
+}
+
+export async function searchLegalCorpus(query: string, docType: string = 'ALL'): Promise<{ query: string; total_hits: number; results: LegalSearchHit[] }> {
+  const res = await fetch(`${API_BASE}/legal/search`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, document_type: docType, top_k: 5 }),
+  });
+  if (!res.ok) throw new Error('Legal corpus search failed');
   return res.json();
 }
 
 export function getPdfUrl(contractId: string): string {
   return `${API_BASE}/contracts/${contractId}/pdf`;
 }
-
