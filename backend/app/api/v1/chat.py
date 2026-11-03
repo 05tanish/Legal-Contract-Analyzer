@@ -34,11 +34,30 @@ def classify_query_intent(query: str, contract_id: Optional[str], requested_mode
     else:
         return "CONTRACT_ONLY"
 
+@observe(name="legal_platform_query", as_type="generation")
 @router.post("", response_model=ChatQueryResponse)
 async def query_legal_platform(
     payload: ChatQueryRequest,
     db: AsyncSession = Depends(get_db)
 ):
+    """
+    Unified Legal Intelligence endpoint with 3-mode routing:
+    1. CONTRACT_ONLY: RAG over user's uploaded contract
+    2. LEGAL_ONLY: Search Indian Constitution, Acts & Supreme Court database
+    3. HYBRID: Contract analysis + Indian law compliance checking
+    
+    Traced with Langfuse for observability.
+    """
+    langfuse_context.update_current_trace(
+        name="Legal Contract Query",
+        session_id=payload.contract_id,
+        user_id="demo-user",
+        tags=["legal-analysis", payload.mode or "auto"],
+        metadata={
+            "query_length": len(payload.query),
+            "has_contract": bool(payload.contract_id)
+        }
+    )
     mode = classify_query_intent(payload.query, payload.contract_id, payload.mode)
     has_api_keys = bool(settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("sk-your"))
 
