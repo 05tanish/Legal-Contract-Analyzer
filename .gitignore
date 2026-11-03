@@ -2,6 +2,9 @@
 TASK_EXECUTION_PLAN.md
 UPGRADE_TO_PRODUCTION_RAG_LLM.md
 
+/docs
+/research_archive
+
 # Environments & Virtual Environments
 venv/
 env/
