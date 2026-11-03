@@ -1,9 +1,10 @@
 from app.services.agents.state import ContractAuditState
+from typing import Dict, Any
 import logging
 
 logger = logging.getLogger(__name__)
 
-async def triage_node(state: ContractAuditState) -> Dict_updates:
+async def triage_node(state: ContractAuditState) -> Dict[str, Any]:
     """
     Analyzes document header / first page to classify contract type (NDA, SaaS, MSA, Vendor).
     """
