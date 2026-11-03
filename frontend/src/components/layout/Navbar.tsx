@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldAlert, FileText, Play, CheckCircle2, UploadCloud, MessageSquare } from 'lucide-react';
+import { ShieldAlert, FileText, Play, UploadCloud, MessageSquare } from 'lucide-react';
 import { Contract } from '../../types';
 
 interface NavbarProps {
@@ -69,20 +69,18 @@ export const Navbar: React.FC<NavbarProps> = ({
           <span>Upload Contract</span>
         </button>
 
-        {/* Chat Drawer Toggle */}
-        {selectedContract && (
-          <button
-            onClick={onToggleChat}
-            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-sm font-medium border transition ${
-              isChatOpen
-                ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/50'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-            }`}
-          >
-            <MessageSquare className="w-4 h-4" />
-            <span>Legal Copilot</span>
-          </button>
-        )}
+        {/* Chat / Legal Research Drawer Toggle */}
+        <button
+          onClick={onToggleChat}
+          className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-sm font-medium border transition ${
+            isChatOpen
+              ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/50'
+              : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+          }`}
+        >
+          <MessageSquare className="w-4 h-4" />
+          <span>Legal Copilot & Indian Law</span>
+        </button>
 
         {/* Run Audit Button */}
         {selectedContract && (
