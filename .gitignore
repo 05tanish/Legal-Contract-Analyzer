@@ -5,6 +5,9 @@ UPGRADE_TO_PRODUCTION_RAG_LLM.md
 /docs
 /research_archive
 
+# Kiro IDE configuration (local only)
+.kiro/
+
 # Environments & Virtual Environments
 venv/
 env/
