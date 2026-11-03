@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize2, AlertTriangle, ExternalLink } from 'lucide-react';
+import { ChevronLeft, ChevronRight, AlertTriangle, ExternalLink } from 'lucide-react';
 import { getPdfUrl } from '../../lib/api';
 
 interface SplitPdfViewerProps {
@@ -18,7 +18,6 @@ export const SplitPdfViewer: React.FC<SplitPdfViewerProps> = ({
   activeCitationSnippet,
 }) => {
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [zoom, setZoom] = useState<number>(100);
 
   useEffect(() => {
     if (activeCitationPage) {
