@@ -27,6 +27,13 @@ async def lifespan(app: FastAPI):
 
     # Auto-seed core Indian legal corpus if empty
     try:
+        # Ensure scripts package is importable from app context
+        import sys
+        import os as _os
+        backend_root = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), "../.."))
+        if backend_root not in sys.path:
+            sys.path.insert(0, backend_root)
+
         from scripts.seed_indian_law import seed_indian_legal_corpus
         from app.db.session import AsyncSessionLocal
         from app.db.models import LegalStatute

@@ -2,12 +2,28 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
+import sys
+import os
 
 from app.db.session import get_db
 from app.db.models import LegalStatute, LegalSection, CourtJudgment
 from app.schemas.legal import LegalSearchRequest, LegalSearchResponse, LegalSearchHit
 from app.services.rag.legal_search import legal_search_engine
-from scripts.seed_indian_law import seed_indian_legal_corpus
+
+# Ensure backend root is in path so scripts package is importable
+_backend_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
+if _backend_root not in sys.path:
+    sys.path.insert(0, _backend_root)
+
+try:
+    from scripts.seed_indian_law import seed_indian_legal_corpus
+except ImportError:
+    seed_indian_legal_corpus = None
+
+try:
+    from scripts.ingest_indian_law_pdf import ingest_constitution_pdf
+except ImportError:
+    ingest_constitution_pdf = None
 
 router = APIRouter()
 
@@ -109,10 +125,26 @@ async def list_judgments(db: AsyncSession = Depends(get_db)):
 
 @router.post("/seed")
 async def trigger_seed_corpus():
-    """Admin endpoint to populate / re-seed the Indian Legal Corpus."""
+    """Admin endpoint to populate / re-seed the Indian Legal Corpus with core Bare Acts & Judgments."""
+    if seed_indian_legal_corpus is None:
+        raise HTTPException(status_code=500, detail="Seed module could not be loaded. Check PYTHONPATH.")
     try:
         await seed_indian_legal_corpus()
         return {"status": "SUCCESS", "message": "Indian Legal Corpus seeded successfully into PostgreSQL and Qdrant."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Seeding failed: {str(e)}")
+
+@router.post("/ingest-pdf")
+async def trigger_pdf_ingestion(pdf_path: Optional[str] = None):
+    """
+    Admin endpoint to extract and index the official Constitution of India PDF
+    into PostgreSQL and Qdrant Cloud.
+    """
+    if ingest_constitution_pdf is None:
+        raise HTTPException(status_code=500, detail="Ingest PDF module could not be loaded. Check PYTHONPATH.")
+    try:
+        result = await ingest_constitution_pdf(pdf_path)
+        return {"status": "SUCCESS", "message": "Constitution PDF successfully parsed and indexed into Qdrant Cloud.", "details": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF ingestion failed: {str(e)}")
 

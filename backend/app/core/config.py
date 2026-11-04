@@ -2,6 +2,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 import os
 
+_backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+_root_dir = os.path.abspath(os.path.join(_backend_dir, ".."))
+
 class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     PROJECT_NAME: str = "Legal Contract Intelligence Platform"
@@ -33,9 +36,14 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     DEFAULT_FAST_LLM: str = "gpt-4o-mini"
-    DEFAULT_REASONING_LLM: str = "qwen/qwen3.8-27b"
+    DEFAULT_REASONING_LLM: str = "llama-3.3-70b-versatile"  # Groq model
     DEFAULT_EMBEDDING_MODEL: str = "text-embedding-3-large"
-    EMBEDDING_DIMENSIONS: int = 1536
+    # Sentence Transformers (all-MiniLM-L6-v2) produces 384-dim vectors.
+    # OpenAI text-embedding-3-large can produce up to 3072. We default to 384
+    # because Sentence Transformers is the primary free local embedding provider.
+    # IMPORTANT: If you switch providers, delete Qdrant collections first and
+    # update this value BEFORE re-indexing any documents.
+    EMBEDDING_DIMENSIONS: int = 384
 
     # Langfuse Observability
     LANGFUSE_PUBLIC_KEY: str = ""
@@ -47,7 +55,11 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE_MB: int = 50
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=[
+            os.path.join(_backend_dir, ".env"),
+            os.path.join(_root_dir, ".env"),
+            ".env"
+        ],
         env_file_encoding="utf-8",
         extra="ignore"
     )

@@ -74,11 +74,13 @@ async def run_contract_audit(
         "all_chunks": chunks_data,
         "parent_chunks_map": parent_map,
         "retrieved_contexts": {},
+        "legal_contexts": {},
         "extracted_findings": [],
         "verified_findings": [],
         "overall_risk_score": 0.0,
         "risk_level": "LOW",
         "executive_summary": "",
+        "query_mode": "CONTRACT_ONLY",
         "error": None
     }
 

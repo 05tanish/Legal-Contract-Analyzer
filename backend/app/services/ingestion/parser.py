@@ -1,11 +1,19 @@
 import fitz  # PyMuPDF
-import pymupdf4llm
 from typing import List, Dict, Any
 import hashlib
 import os
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Safe optional pymupdf4llm import
+try:
+    import pymupdf4llm
+    PYMUPDF4LLM_AVAILABLE = True
+except Exception as e:
+    logger.warning(f"pymupdf4llm could not be loaded ({e}). Raw PyMuPDF fallback will be used.")
+    pymupdf4llm = None
+    PYMUPDF4LLM_AVAILABLE = False
 
 class DocumentParser:
     @staticmethod
@@ -31,6 +39,9 @@ class DocumentParser:
         pages_data = []
 
         try:
+            if not PYMUPDF4LLM_AVAILABLE or pymupdf4llm is None:
+                raise ImportError("pymupdf4llm not available, using raw PyMuPDF parser.")
+
             # Use pymupdf4llm to extract structured markdown with page chunks
             # to preserve headings (# Article 1), tables, and formatting
             md_pages = pymupdf4llm.to_markdown(file_path, page_chunks=True)
