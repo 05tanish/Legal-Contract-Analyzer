@@ -3,31 +3,105 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  --bg-main: #fcfcfc;
+  --bg-card: #ffffff;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --primary-color: #0f172a;
+  --border-color: #e5e7eb;
+}
+
+.dark {
+  --bg-main: #0c0d10;
+  --bg-card: #131418;
+  --text-primary: #f4f4f5;
+  --text-secondary: #9ca3af;
+  --primary-color: #ffffff;
+  --border-color: #23252a;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-  margin: 0;
-  min-height: 100vh;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Custom scrollbar for legal document reading */
+/* SaaS Card Panel */
+.saas-card {
+  border-radius: 0.5rem;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.dark .saas-card {
+  background: #131418;
+  border: 1px solid #23252a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+:not(.dark) .saas-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+/* Verbatim Contract Evidence Box */
+.evidence-box {
+  padding: 0.75rem 1rem;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+  white-space: pre-wrap;
+  border-radius: 0 0.25rem 0.25rem 0;
+  line-height: 1.5;
+}
+
+.dark .evidence-box {
+  background-color: #0e0f12;
+  border-left: 3px solid #52525b;
+  color: #e4e4e7;
+}
+
+:not(.dark) .evidence-box {
+  background-color: #f9fafb;
+  border-left: 3px solid #94a3b8;
+  color: #1e293b;
+}
+
+/* Subtle, clean scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
-::-webkit-scrollbar-track {
-  background: #0f172a;
+.dark ::-webkit-scrollbar-track {
+  background: #0c0d10;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #334155;
+.dark ::-webkit-scrollbar-thumb {
+  background: #27272a;
   border-radius: 3px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
 }
 
+:not(.dark) ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+:not(.dark) ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+:not(.dark) ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

@@ -59,6 +59,19 @@ class DocumentParser:
                     "headings": headings,
                     "token_estimate": len(text.split())
                 })
+
+            # If all extracted pages are empty, trigger raw fitz fallback
+            if not any(p.get("content") for p in pages_data) and total_pages > 0:
+                pages_data.clear()
+                for page_idx in range(total_pages):
+                    page = doc.load_page(page_idx)
+                    text = page.get_text("text").strip()
+                    pages_data.append({
+                        "page_number": page_idx + 1,
+                        "content": text,
+                        "headings": [],
+                        "token_estimate": len(text.split())
+                    })
         except Exception as e:
             logger.warning(f"pymupdf4llm fallback triggered due to: {e}")
             # Robust fallback to raw fitz extraction

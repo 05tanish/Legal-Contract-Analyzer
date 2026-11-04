@@ -108,6 +108,32 @@ class QdrantService:
             )
         logger.info(f"Indexed {len(points)} contract chunks into {self.contract_collection}.")
 
+    def delete_contract_points(self, contract_id: str) -> bool:
+        """
+        Deletes all vector points associated with a specific contract_id.
+        Used for contract deletion and automated guest cleanup.
+        Idempotent: safe to run if points do not exist.
+        """
+        try:
+            query_filter = qmodels.Filter(
+                must=[
+                    qmodels.FieldCondition(
+                        key="contract_id",
+                        match=qmodels.MatchValue(value=contract_id)
+                    )
+                ]
+            )
+            selector = qmodels.FilterSelector(filter=query_filter)
+            self.client.delete(
+                collection_name=self.contract_collection,
+                points_selector=selector
+            )
+            logger.info(f"Successfully removed Qdrant points for contract_id={contract_id} from {self.contract_collection}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete points for contract_id={contract_id} in Qdrant: {e}")
+            return False
+
     def search_dense(self, query_vector: List[float], contract_id: str, limit: int = 20) -> List[Dict[str, Any]]:
         """Searches dense embeddings with a hard contract_id payload filter."""
         query_filter = qmodels.Filter(
@@ -133,12 +159,12 @@ class QdrantService:
 
         return [
             {
-                "chunk_id": hit.payload.get("chunk_id"),
+                "chunk_id": (hit.payload or {}).get("chunk_id"),
                 "score": hit.score,
-                "content": hit.payload.get("content"),
-                "page_number": hit.payload.get("page_number"),
-                "parent_id": hit.payload.get("parent_id"),
-                "section_title": hit.payload.get("section_title"),
+                "content": (hit.payload or {}).get("content"),
+                "page_number": (hit.payload or {}).get("page_number"),
+                "parent_id": (hit.payload or {}).get("parent_id"),
+                "section_title": (hit.payload or {}).get("section_title"),
             }
             for hit in results
         ]
@@ -211,20 +237,20 @@ class QdrantService:
 
         return [
             {
-                "legal_id": hit.payload.get("legal_id"),
+                "legal_id": (hit.payload or {}).get("legal_id"),
                 "score": hit.score,
-                "document_type": hit.payload.get("document_type"),
-                "act_name": hit.payload.get("act_name"),
-                "act_year": hit.payload.get("act_year"),
-                "section_number": hit.payload.get("section_number"),
-                "title": hit.payload.get("title"),
-                "content": hit.payload.get("content"),
-                "case_title": hit.payload.get("case_title"),
-                "neutral_citation": hit.payload.get("neutral_citation"),
-                "ratio_decidendi": hit.payload.get("ratio_decidendi"),
-                "court_name": hit.payload.get("court_name"),
-                "source_url": hit.payload.get("source_url"),
-                "status": hit.payload.get("status", "CURRENT")
+                "document_type": (hit.payload or {}).get("document_type"),
+                "act_name": (hit.payload or {}).get("act_name"),
+                "act_year": (hit.payload or {}).get("act_year"),
+                "section_number": (hit.payload or {}).get("section_number"),
+                "title": (hit.payload or {}).get("title"),
+                "content": (hit.payload or {}).get("content"),
+                "case_title": (hit.payload or {}).get("case_title"),
+                "neutral_citation": (hit.payload or {}).get("neutral_citation"),
+                "ratio_decidendi": (hit.payload or {}).get("ratio_decidendi"),
+                "court_name": (hit.payload or {}).get("court_name"),
+                "source_url": (hit.payload or {}).get("source_url"),
+                "status": (hit.payload or {}).get("status", "CURRENT")
             }
             for hit in results
         ]

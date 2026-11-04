@@ -39,6 +39,18 @@ redis>=5.1.1
 langfuse>=2.50.0
 ragas>=0.2.1
 
+# Cloud Storage & Third-Party Integrations
+cloudinary>=1.40.0
+email-validator>=2.2.0
+
+# LLM Providers & Agents
+google-generativeai>=0.8.0
+groq>=0.11.0
+
+# ML & Numerics
+joblib>=1.4.2
+numpy>=1.26.4
+
 # Utilities
 python-dotenv>=1.0.1
 aiofiles>=24.1.0

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 
 interface RedlineDiffViewerProps {
@@ -10,7 +10,7 @@ export const RedlineDiffViewer: React.FC<RedlineDiffViewerProps> = ({
   originalText,
   proposedRedline,
 }) => {
-  const [copied, setCopied] = React.useState(false);
+  const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(proposedRedline);
@@ -19,37 +19,36 @@ export const RedlineDiffViewer: React.FC<RedlineDiffViewerProps> = ({
   };
 
   return (
-    <div className="mt-3 border border-slate-800 rounded-lg overflow-hidden bg-slate-950/70">
-      <div className="bg-slate-900/80 px-3 py-1.5 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400 font-medium">
-        <span className="flex items-center space-x-1.5">
-          <span>Proposed Redline Amendment</span>
-        </span>
+    <div className="mt-3 border border-neutral-200 dark:border-[#27272a] rounded-lg overflow-hidden bg-white dark:bg-[#131418] shadow-xs">
+      <div className="bg-neutral-50 dark:bg-[#18191e] px-3.5 py-2 border-b border-neutral-200 dark:border-[#27272a] flex items-center justify-between text-xs text-neutral-700 dark:text-neutral-200 font-medium">
+        <span className="font-semibold text-neutral-800 dark:text-neutral-100">Suggested Contract Revision</span>
         <button
           onClick={handleCopy}
-          className="flex items-center space-x-1 text-slate-400 hover:text-indigo-400 transition"
+          className="flex items-center space-x-1 text-xs text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white bg-white dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 border border-neutral-300 dark:border-neutral-700 px-2 py-0.5 rounded transition"
+          title="Copy revised clause to clipboard"
         >
-          {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-          <span>{copied ? 'Copied' : 'Copy Clause'}</span>
+          {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+          <span>{copied ? 'Copied' : 'Copy Revised Text'}</span>
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 text-xs divide-y md:divide-y-0 md:divide-x divide-slate-800 font-mono">
+      <div className="grid grid-cols-1 md:grid-cols-2 text-xs divide-y md:divide-y-0 md:divide-x divide-neutral-200 dark:divide-[#27272a] font-mono">
         {/* Original Clause */}
-        <div className="p-3 bg-red-950/10">
-          <div className="text-[11px] font-semibold text-red-400 mb-1 flex items-center space-x-1 uppercase">
-            <span>Original (Current Terms)</span>
+        <div className="p-3.5 bg-red-50/40 dark:bg-red-950/20">
+          <div className="text-[10px] font-bold text-red-700 dark:text-red-400 mb-1.5 flex items-center space-x-1 uppercase tracking-wider">
+            <span>Current Clause in Contract</span>
           </div>
-          <p className="text-slate-300 leading-relaxed line-through decoration-red-500/50">
+          <p className="text-neutral-700 dark:text-neutral-300 leading-relaxed line-through decoration-red-400">
             {originalText}
           </p>
         </div>
 
         {/* Proposed Redline */}
-        <div className="p-3 bg-emerald-950/10">
-          <div className="text-[11px] font-semibold text-emerald-400 mb-1 flex items-center space-x-1 uppercase">
-            <span>Proposed Standard Language</span>
+        <div className="p-3.5 bg-emerald-50/40 dark:bg-emerald-950/20">
+          <div className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 mb-1.5 flex items-center space-x-1 uppercase tracking-wider">
+            <span>Suggested Safer Terms</span>
           </div>
-          <p className="text-emerald-200 leading-relaxed font-sans font-medium">
+          <p className="text-neutral-900 dark:text-neutral-100 leading-relaxed font-sans font-medium">
             {proposedRedline}
           </p>
         </div>
@@ -57,4 +56,3 @@ export const RedlineDiffViewer: React.FC<RedlineDiffViewerProps> = ({
     </div>
   );
 };
-

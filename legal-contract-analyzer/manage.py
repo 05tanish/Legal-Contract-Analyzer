@@ -1,22 +1,29 @@
 #!/usr/bin/env python
-"""Django's command-line utility for administrative tasks."""
-import os
+"""
+LexAI CLI & Management Script
+==============================
+(Migrated from legacy Django to production FastAPI + React stack)
+Running 'python manage.py runserver' will start the FastAPI platform.
+"""
+
 import sys
+import os
 
+if __name__ == "__main__":
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    sys.path.insert(0, BASE_DIR)
 
-def main():
-    """Run administrative tasks."""
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
-    try:
-        from django.core.management import execute_from_command_line
-    except ImportError as exc:
-        raise ImportError(
-            "Couldn't import Django. Are you sure it's installed and "
-            "available on your PYTHONPATH environment variable? Did you "
-            "forget to activate a virtual environment?"
-        ) from exc
-    execute_from_command_line(sys.argv)
-
-
-if __name__ == '__main__':
-    main()
+    # If runserver is invoked (e.g. from muscle memory or old scripts), launch FastAPI
+    if len(sys.argv) > 1 and sys.argv[1] == "runserver":
+        from run import start_backend
+        port = 8000
+        if len(sys.argv) > 2 and ":" in sys.argv[2]:
+            try:
+                port = int(sys.argv[2].split(":")[-1])
+            except ValueError:
+                pass
+        start_backend(port=port)
+    else:
+        # Pass through to run.py
+        import run
+        run.start_backend()

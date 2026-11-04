@@ -57,9 +57,35 @@ export interface Contract {
   total_pages: number;
   contract_type: string;
   status: 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED';
+  cloudinary_url?: string;
+  cloudinary_public_id?: string;
+  is_guest?: boolean;
+  guest_session_id?: string;
+  expires_at?: string;
+  user_id?: string;
   error_message?: string;
   created_at: string;
   chunks_count?: number;
+}
+
+export interface DetectedClause {
+  category_id: string;
+  category_title: string;
+  severity: RiskSeverity;
+  description: string;
+  page_number: number;
+  section_title: string;
+  snippet: string;
+  method: 'CUAD_ML' | 'HEURISTIC';
+}
+
+export interface ClauseDetectionResponse {
+  contract_id: string;
+  filename: string;
+  total_clauses_detected: number;
+  is_guest: boolean;
+  expires_at?: string;
+  clauses: DetectedClause[];
 }
 
 export interface PlaybookRule {
@@ -104,3 +130,18 @@ export interface LegalSearchHit {
   source_url?: string;
   status?: string;
 }
+
+export interface User {
+  id: string;
+  email: string;
+  full_name?: string;
+  avatar_url?: string;
+  created_at?: string;
+}
+
+export interface AuthResponse {
+  access_token: string;
+  token_type: string;
+  user: User;
+}
+

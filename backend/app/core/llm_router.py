@@ -72,7 +72,9 @@ class LLMRouter:
     @property
     def instructor_groq(self):
         if self._instructor_groq is None:
-            self._instructor_groq = instructor.from_openai(self.groq)
+            # MD_JSON generates structured JSON schema in prompt without requiring native tool-calling,
+            # ensuring compatibility with all Groq models including qwen/qwen3.8-27b
+            self._instructor_groq = instructor.from_openai(self.groq, mode=instructor.Mode.MD_JSON)
         return self._instructor_groq
 
     @property

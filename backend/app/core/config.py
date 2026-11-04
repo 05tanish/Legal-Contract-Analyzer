@@ -46,9 +46,27 @@ class Settings(BaseSettings):
     LANGFUSE_SECRET_KEY: str = ""
     LANGFUSE_HOST: str = "https://cloud.langfuse.com"
 
+    # Authentication & Security
+    SECRET_KEY: str = "contractiq_enterprise_super_secret_legal_key_2026"
+    ACCESS_TOKEN_EXPIRE_DAYS: int = 14
+
+    # Guest Workflow & Automatic Cleanup
+    GUEST_CONTRACT_RETENTION_HOURS: int = 24  # Configurable TTL for guest contracts
+    CLEANUP_INTERVAL_MINUTES: int = 15       # Scheduled cleanup frequency
+
+    # Cloudinary Storage
+    CLOUDINARY_CLOUD_NAME: str = ""
+    CLOUDINARY_API_KEY: str = ""
+    CLOUDINARY_API_SECRET: str = ""
+
     # File Uploads
     UPLOAD_DIR: str = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../uploads"))
     MAX_FILE_SIZE_MB: int = 50
+
+    def model_post_init(self, __context):
+        if not os.path.isabs(self.UPLOAD_DIR):
+            self.UPLOAD_DIR = os.path.abspath(os.path.join(_root_dir, self.UPLOAD_DIR.lstrip("./")))
+        os.makedirs(self.UPLOAD_DIR, exist_ok=True)
 
     model_config = SettingsConfigDict(
         env_file=[

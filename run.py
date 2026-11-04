@@ -18,6 +18,29 @@ BACKEND_DIR = os.path.join(BASE_DIR, "backend")
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
+_user_site = os.path.expanduser("~/Library/Python/3.12/lib/python/site-packages")
+if os.path.exists(_user_site) and _user_site not in sys.path:
+    sys.path.append(_user_site)
+
+# Polyfill 'packaging' for langchain_core/langgraph if not installed as standalone top-level package
+if 'packaging' not in sys.modules:
+    try:
+        import packaging
+    except ImportError:
+        for vendor_prefix in ['setuptools._vendor.packaging', 'pip._vendor.packaging']:
+            try:
+                base = __import__(vendor_prefix, fromlist=['packaging'])
+                sys.modules['packaging'] = base
+                for sub in ['version', 'specifiers', 'requirements', 'markers', 'tags', 'utils']:
+                    try:
+                        smod = __import__(f'{vendor_prefix}.{sub}', fromlist=[sub])
+                        sys.modules[f'packaging.{sub}'] = smod
+                    except Exception:
+                        pass
+                break
+            except Exception:
+                pass
+
 def start_backend(host="127.0.0.1", port=8000, reload=True):
     import uvicorn
     print("=" * 60)
@@ -64,3 +87,4 @@ if __name__ == "__main__":
         start_worker()
     else:
         start_backend(host=args.host, port=args.port, reload=not args.no_reload)
+

@@ -27,6 +27,12 @@ class ContractResponse(BaseModel):
     total_pages: int
     contract_type: str
     status: str
+    cloudinary_url: Optional[str] = None
+    cloudinary_public_id: Optional[str] = None
+    is_guest: bool = False
+    guest_session_id: Optional[str] = None
+    expires_at: Optional[datetime] = None
+    user_id: Optional[str] = None
     error_message: Optional[str] = None
     created_at: datetime
 

@@ -74,6 +74,21 @@ services:
       postgres:
         condition: service_healthy
 
+  # ----------------------------------------------------
+  # Frontend UI: React + TypeScript + Vite Production Web App
+  # Served with Nginx & reverse proxy
+  # ----------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: legal_contract_frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
 volumes:
   postgres_data:
   backend_uploads:

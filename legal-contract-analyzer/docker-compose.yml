@@ -1,25 +1,94 @@
-version: '3.8'
+version: '3.9'
+
+# ==============================================================================
+# LexAI – Legal Contract Intelligence Platform
+# Cloud-Native Compose (Qdrant Cloud + Redis Upstash + Neon PostgreSQL)
+# Only Postgres runs locally in Docker; Qdrant and Redis are cloud services.
+# ==============================================================================
 
 services:
-  web:
-    build: .
-    container_name: legal-contract-analyzer
+  # ----------------------------------------------------
+  # PostgreSQL: Relational Metadata, Audit History & Users
+  # Remove this service if you use a cloud DB (e.g. Neon)
+  # ----------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: legal_contract_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-legal_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-legal_secret_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-legal_analyzer_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-legal_admin} -d ${POSTGRES_DB:-legal_analyzer_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------
+  # Backend API: FastAPI Core & LangGraph RAG Service
+  # Uses Cloud Qdrant + Cloud Redis (env vars from .env)
+  # ----------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: legal_contract_backend
+    restart: unless-stopped
     ports:
       - "8000:8000"
-    volumes:
-      # Mount the media directory to persist uploaded files
-      - media_volume:/app/media
-      # Persist SQLite database (Remove if using PostgreSQL in prod)
-      - ./db.sqlite3:/app/db.sqlite3
+    env_file:
+      - ./backend/.env
     environment:
-      - DEBUG=False
-      # Allow local and production hosts
-      - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
-      # Provide a secure secret key in production
-      - SECRET_KEY=your_secure_production_secret_key_here
-      # If using postgres instead of sqlite, specify DATABASE_URL
-      # - DATABASE_URL=postgres://user:password@db:5432/dbname
-    restart: always
+      - ENVIRONMENT=development
+    volumes:
+      - ./backend:/app
+      - backend_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ----------------------------------------------------
+  # Celery Worker: Async PDF Ingestion & Embedding Generator
+  # Uses Cloud Qdrant + Cloud Redis (env vars from .env)
+  # ----------------------------------------------------
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: legal_contract_worker
+    restart: unless-stopped
+    command: celery -A workers.celery_app.celery worker --loglevel=info --concurrency=2
+    env_file:
+      - ./backend/.env
+    environment:
+      - ENVIRONMENT=development
+    volumes:
+      - ./backend:/app
+      - backend_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ----------------------------------------------------
+  # Frontend UI: React + TypeScript + Vite Production Web App
+  # Served with Nginx & reverse proxy
+  # ----------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: legal_contract_frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
 
 volumes:
-  media_volume:
+  postgres_data:
+  backend_uploads:

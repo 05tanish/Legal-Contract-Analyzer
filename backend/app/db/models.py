@@ -11,10 +11,26 @@ def utc_now():
     """Return timezone-naive UTC datetime for PostgreSQL compatibility"""
     return datetime.utcnow()
 
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=True) # nullable for Google OAuth users
+    full_name = Column(String(255), nullable=True)
+    avatar_url = Column(String(512), nullable=True)
+    google_id = Column(String(128), unique=True, index=True, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+
+    contracts = relationship("Contract", back_populates="user", cascade="all, delete-orphan")
+
 class Contract(Base):
     __tablename__ = "contracts"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     filename = Column(String(255), nullable=False)
     file_path = Column(String(512), nullable=False)
     file_hash = Column(String(64), index=True, nullable=False)
@@ -22,10 +38,18 @@ class Contract(Base):
     total_pages = Column(Integer, default=0)
     contract_type = Column(String(50), default="UNCLASSIFIED") # NDA, MSA, SAAS, EMPLOYMENT
     status = Column(String(30), default="PENDING") # PENDING, PROCESSING, READY, FAILED
+    cloudinary_url = Column(String(1024), nullable=True)
+    cloudinary_public_id = Column(String(255), nullable=True) # Cloudinary public asset ID for deletion
+    is_guest = Column(Boolean, default=False, index=True)      # True if uploaded in guest session
+    guest_session_id = Column(String(64), nullable=True, index=True) # Session token for guest isolation
+    expires_at = Column(DateTime, nullable=True, index=True)   # TTL timestamp for guest contracts
+    cleanup_status = Column(String(30), default="NONE")        # NONE, PENDING, CLEANED, FAILED_QDRANT, FAILED_CLOUDINARY
+    cleanup_retries = Column(Integer, default=0)
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
+    user = relationship("User", back_populates="contracts")
     chunks = relationship("ContractChunk", back_populates="contract", cascade="all, delete-orphan")
     audits = relationship("AuditReport", back_populates="contract", cascade="all, delete-orphan")
 

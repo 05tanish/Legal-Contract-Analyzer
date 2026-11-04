@@ -34,6 +34,20 @@ async def verifier_node(state: ContractAuditState):
                     is_verified = True
                     break
 
+        # Defensive defaults for database constraints
+        try:
+            p_val = int(f_dict.get("page_number", 1) or 1)
+            f_dict["page_number"] = max(1, p_val)
+        except (ValueError, TypeError):
+            f_dict["page_number"] = 1
+
+        if not f_dict.get("clause_category"):
+            f_dict["clause_category"] = "General"
+        if not f_dict.get("severity"):
+            f_dict["severity"] = "LOW"
+        if f_dict.get("confidence_score") is None:
+            f_dict["confidence_score"] = 1.0
+
         f_dict["is_verified"] = is_verified
         verified_findings.append(f_dict)
 

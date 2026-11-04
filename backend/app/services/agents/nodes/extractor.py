@@ -15,8 +15,8 @@ async def extractor_node(state: ContractAuditState):
     retrieved_contexts = state.get("retrieved_contexts", {})
     extracted_findings = []
 
-    # Check if real LLM API keys are active
-    has_api_keys = bool(settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("sk-your")) or bool(settings.ANTHROPIC_API_KEY)
+    # Check if real LLM API keys are active (Groq, OpenAI, Anthropic)
+    has_api_keys = bool(settings.GROQ_API_KEY) or bool(settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("sk-your")) or bool(settings.ANTHROPIC_API_KEY)
 
     if has_api_keys:
         try:
@@ -29,7 +29,7 @@ async def extractor_node(state: ContractAuditState):
                     continue
 
                 context_blocks = "\n\n".join([
-                    f"[Page {c['page_number']} | Section: {c.get('section_title', 'General')}]:\n{c.get('parent_full_text', c['content'])}"
+                    f"[Page {c.get('page_number', 1)} | Section: {c.get('section_title', 'General')}]:\n{c.get('parent_full_text', c.get('content', ''))}"
                     for c in chunks
                 ])
 
@@ -56,10 +56,12 @@ Contract Excerpts:
                     ],
                     temperature=0.1
                 )
-                extracted_findings.append(finding)
+                if finding:
+                    extracted_findings.append(finding)
 
         except Exception as e:
             logger.warning(f"LLM extraction error: {e}. Falling back to rule-based extractor.")
+            extracted_findings.clear()
             has_api_keys = False
 
     if not has_api_keys:
