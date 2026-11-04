@@ -19,15 +19,18 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (libgomp1 required by onnxruntime/rapidocr)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install python dependencies
+# Install greenlet first explicitly to ensure it's compiled with build-essential available
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir greenlet>=3.0.3 && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy backend source
@@ -45,3 +48,4 @@ EXPOSE 8000
 
 WORKDIR /app/backend
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WEB_CONCURRENCY:-2}"]
+

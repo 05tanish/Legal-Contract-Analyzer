@@ -1,10 +1,1 @@
-pandas
-numpy
-scikit-learn
-nltk
-matplotlib
-seaborn
-joblib
-jupyter
-nbformat
-nbconvert
+-r backend/requirements.txt
