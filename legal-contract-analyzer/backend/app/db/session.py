@@ -4,6 +4,8 @@ from app.core.config import settings
 import logging
 import os
 
+import asyncio
+
 logger = logging.getLogger(__name__)
 
 class Base(DeclarativeBase):
@@ -96,23 +98,24 @@ async def init_db():
     """Initializes tables on startup with zero-crash SQLite fallback."""
     global engine
     try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-            try:
-                from sqlalchemy import text
-                await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS cloudinary_url VARCHAR(1024);"))
-                await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS cloudinary_public_id VARCHAR(255);"))
-                await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS user_id VARCHAR(36);"))
-                await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS is_guest BOOLEAN DEFAULT FALSE;"))
-                await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS guest_session_id VARCHAR(64);"))
-                await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;"))
-                await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS cleanup_status VARCHAR(30) DEFAULT 'NONE';"))
-                await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS cleanup_retries INTEGER DEFAULT 0;"))
-            except Exception as e:
-                logger.debug(f"Schema check note: {e}")
+        async with asyncio.timeout(5):
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+                try:
+                    from sqlalchemy import text
+                    await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS cloudinary_url VARCHAR(1024);"))
+                    await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS cloudinary_public_id VARCHAR(255);"))
+                    await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS user_id VARCHAR(36);"))
+                    await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS is_guest BOOLEAN DEFAULT FALSE;"))
+                    await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS guest_session_id VARCHAR(64);"))
+                    await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;"))
+                    await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS cleanup_status VARCHAR(30) DEFAULT 'NONE';"))
+                    await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS cleanup_retries INTEGER DEFAULT 0;"))
+                except Exception as e:
+                    logger.debug(f"Schema check note: {e}")
         logger.info("Database tables initialized successfully with primary engine.")
     except Exception as err:
-        logger.warning(f"Primary database connection failed ({err}). Falling back to embedded SQLite for zero-downtime startup...")
+        logger.warning(f"Primary database connection failed or timed out ({err}). Falling back to embedded SQLite for zero-downtime startup...")
         await switch_to_sqlite()
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)

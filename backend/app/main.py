@@ -68,25 +68,10 @@ async def periodic_guest_cleanup_worker():
             logger.error(f"Error in automated guest cleanup task: {e}")
             await asyncio.sleep(30)
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup: ensure tables exist and directories exist
-    logger.info("Initializing Legal Contract Analyzer services...")
-    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-
-    # Initialize database with automatic fallback
+async def background_seed_worker():
+    """Seeds the Indian legal knowledge base asynchronously in the background so HTTP server opens immediately."""
+    await asyncio.sleep(2)
     try:
-        from app.db.session import init_db
-        await init_db()
-    except Exception as e:
-        logger.error(f"Database initialization non-fatal warning: {e}")
-
-    # Start periodic guest contract cleanup background task
-    cleanup_task = asyncio.create_task(periodic_guest_cleanup_worker())
-
-    # Auto-seed core Indian legal corpus if empty
-    try:
-        # Ensure scripts package is importable from app context
         import sys
         import os as _os
         backend_root = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), "../.."))
@@ -100,18 +85,40 @@ async def lifespan(app: FastAPI):
         async with AsyncSessionLocal() as session:
             res = await session.execute(select(LegalStatute).limit(1))
             if not res.scalars().first():
-                logger.info("Indian Legal Corpus is empty. Running initial seeding on startup...")
+                logger.info("Indian Legal Corpus is empty. Running background initial seeding...")
                 await seed_indian_legal_corpus()
-                logger.info("Indian Legal Corpus seeded successfully.")
+                logger.info("Indian Legal Corpus seeded successfully in background.")
     except Exception as e:
-        logger.warning(f"Auto-seed check non-blocking note: {e}")
+        logger.warning(f"Background corpus seeding note: {e}")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: ensure tables exist and directories exist
+    logger.info("Initializing Legal Contract Analyzer services...")
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+
+    # Initialize database with automatic fallback
+    try:
+        from app.db.session import init_db
+        await init_db()
+    except Exception as e:
+        logger.error(f"Database initialization non-fatal warning: {e}")
+
+    # Start background workers (non-blocking!)
+    cleanup_task = asyncio.create_task(periodic_guest_cleanup_worker())
+    seed_task = asyncio.create_task(background_seed_worker())
 
     yield
 
     # Shutdown
     cleanup_task.cancel()
+    seed_task.cancel()
     try:
         await cleanup_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await seed_task
     except asyncio.CancelledError:
         pass
 
@@ -142,6 +149,7 @@ app.add_middleware(
 
 # Health Check
 @app.get("/health", tags=["System"])
+@app.get(f"{settings.API_V1_PREFIX}/health", tags=["System"])
 async def health_check():
     return {
         "status": "healthy",
