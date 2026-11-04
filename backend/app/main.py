@@ -1,8 +1,15 @@
+import os
+import sys
+
+# Ensure backend root is always first on sys.path regardless of where uvicorn is invoked from
+_backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _backend_dir not in sys.path:
+    sys.path.insert(0, _backend_dir)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
-import os
 import logging
 
 from app.core.config import settings

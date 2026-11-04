@@ -2,6 +2,9 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.db.session import get_db
 from app.db.models import Contract, ContractChunk
@@ -58,7 +61,7 @@ async def query_legal_platform(
     Traced with Langfuse for observability.
     """
     mode = classify_query_intent(payload.query, payload.contract_id, payload.mode)
-    has_api_keys = bool(settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("sk-your"))
+    has_api_keys = bool(settings.GROQ_API_KEY) or bool(settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("sk-your"))
 
     # ----------------------------------------------------
     # MODE 1: INDIAN LEGAL RESEARCH ONLY (No Contract needed)
@@ -75,6 +78,7 @@ async def query_legal_platform(
                 legal_citations=[]
             )
 
+        answer = None
         if has_api_keys:
             context_blocks = "\n\n".join([
                 f"[{h.get('document_type', 'LEGAL_DOC')} | {h.get('act_name', h.get('case_title'))} ({h.get('section_number', h.get('neutral_citation'))})]:\n{h.get('content', '')}"
@@ -89,16 +93,18 @@ Indian Legal Context:
 
 User Question: {payload.query}
 """
-            response = await llm_router.openai.chat.completions.create(
-                model=settings.DEFAULT_FAST_LLM,
-                messages=[
-                    {"role": "system", "content": "You are a scholarly Indian legal research specialist."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.1
-            )
-            answer = response.choices[0].message.content
-        else:
+            try:
+                answer = await llm_router.generate_chat_completion(
+                    messages=[
+                        {"role": "system", "content": "You are a scholarly Indian legal research specialist."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.1
+                )
+            except Exception as e:
+                logger.warning(f"LLM chat completion error: {e}. Falling back to legal knowledge base.")
+
+        if not answer:
             top_hit = legal_hits[0]
             answer = f"**Indian Legal Authority:**\n\nUnder **{top_hit.get('act_name', top_hit.get('case_title'))}** ({top_hit.get('section_number', top_hit.get('neutral_citation'))}):\n\n> \"{top_hit['content']}\"\n\n*Judicial Note:* Statutory provisions are interpreted strictly according to binding Supreme Court precedent."
 
@@ -162,6 +168,7 @@ User Question: {payload.query}
                 citations=[]
             )
 
+        answer = None
         if has_api_keys:
             context_str = "\n\n".join([f"[Page {c['page_number']} | {c.get('section_title', '')}]: {c['content']}" for c in top_contract_chunks])
             prompt = f"""You are a specialized Legal AI Assistant reviewing contract '{contract.filename}'.
@@ -173,16 +180,18 @@ Context:
 
 User Question: {payload.query}
 """
-            response = await llm_router.openai.chat.completions.create(
-                model=settings.DEFAULT_FAST_LLM,
-                messages=[
-                    {"role": "system", "content": "You are a precise corporate legal assistant."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.2
-            )
-            answer = response.choices[0].message.content
-        else:
+            try:
+                answer = await llm_router.generate_chat_completion(
+                    messages=[
+                        {"role": "system", "content": "You are a precise corporate legal assistant."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.2
+                )
+            except Exception as e:
+                logger.warning(f"LLM contract chat completion failed: {e}. Using excerpt fallback.")
+
+        if not answer:
             top_c = top_contract_chunks[0]
             answer = f"Based on Section '{top_c.get('section_title', 'General')}' (Page {top_c['page_number']}), the contract stipulates:\n\n\"{top_c['content'][:400]}...\""
 
@@ -199,6 +208,7 @@ User Question: {payload.query}
     legal_hits = await legal_search_engine.search(query=payload.query, db=db, top_k=5)
     legal_citations = legal_search_engine.hits_to_citations(legal_hits)
 
+    answer = None
     if has_api_keys:
         contract_context = "\n\n".join([f"[Contract Page {c['page_number']} | {c.get('section_title', '')}]:\n{c['content']}" for c in top_contract_chunks])
         legal_context = "\n\n".join([f"[{h.get('document_type')} | {h.get('act_name', h.get('case_title'))} ({h.get('section_number', h.get('neutral_citation'))})]:\n{h.get('content')}" for h in legal_hits])
@@ -223,15 +233,16 @@ INSTRUCTIONS:
 5. State any judicial uncertainty, factual dependencies, or severability issues.
 6. Conclude with a clear legal risk summary. Do NOT give unconditional advice without noting disclaimers.
 """
-        response = await llm_router.openai.chat.completions.create(
-            model=settings.DEFAULT_FAST_LLM,
-            messages=[
-                {"role": "system", "content": "You are an elite Indian commercial contract lawyer. Output well-structured, grounded legal analysis."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.1
-        )
-        answer = response.choices[0].message.content
+        try:
+            answer = await llm_router.generate_chat_completion(
+                messages=[
+                    {"role": "system", "content": "You are an elite Indian commercial contract lawyer. Output well-structured, grounded legal analysis."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1
+            )
+        except Exception as e:
+            logger.warning(f"LLM hybrid chat completion failed: {e}. Using deterministic legal analysis.")
     else:
         # High quality offline fallback for non-compete / restraint of trade & commercial clauses
         top_c = top_contract_chunks[0] if top_contract_chunks else {"page_number": 1, "content": "Restraint clause in contract."}

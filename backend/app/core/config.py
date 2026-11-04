@@ -36,13 +36,9 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     DEFAULT_FAST_LLM: str = "gpt-4o-mini"
-    DEFAULT_REASONING_LLM: str = "llama-3.3-70b-versatile"  # Groq model
+    DEFAULT_REASONING_LLM: str = "qwen/qwen3.8-27b"  # Active model on Groq account
     DEFAULT_EMBEDDING_MODEL: str = "text-embedding-3-large"
     # Sentence Transformers (all-MiniLM-L6-v2) produces 384-dim vectors.
-    # OpenAI text-embedding-3-large can produce up to 3072. We default to 384
-    # because Sentence Transformers is the primary free local embedding provider.
-    # IMPORTANT: If you switch providers, delete Qdrant collections first and
-    # update this value BEFORE re-indexing any documents.
     EMBEDDING_DIMENSIONS: int = 384
 
     # Langfuse Observability

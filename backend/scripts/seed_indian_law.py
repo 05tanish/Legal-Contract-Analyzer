@@ -242,34 +242,53 @@ async def seed_indian_legal_corpus():
         qdrant_points = []
 
         for stat_data in STATUTES_SEED:
-            statute_id = str(uuid.uuid4())
-            statute = LegalStatute(
-                id=statute_id,
-                act_name=stat_data["act_name"],
-                act_year=stat_data["act_year"],
-                act_number=stat_data["act_number"],
-                short_title=stat_data["short_title"],
-                jurisdiction=stat_data["jurisdiction"],
-                enactment_date=stat_data["enactment_date"],
-                commencement_date=stat_data["commencement_date"],
-                source_url=stat_data["source_url"],
-                status=stat_data["status"]
+            from sqlalchemy import select
+            stat_res = await session.execute(
+                select(LegalStatute).where(LegalStatute.act_name == stat_data["act_name"])
             )
-            session.add(statute)
+            existing_statute = stat_res.scalars().first()
+
+            if not existing_statute:
+                statute_id = str(uuid.uuid4())
+                statute = LegalStatute(
+                    id=statute_id,
+                    act_name=stat_data["act_name"],
+                    act_year=stat_data["act_year"],
+                    act_number=stat_data["act_number"],
+                    short_title=stat_data["short_title"],
+                    jurisdiction=stat_data["jurisdiction"],
+                    enactment_date=stat_data["enactment_date"],
+                    commencement_date=stat_data["commencement_date"],
+                    source_url=stat_data["source_url"],
+                    status=stat_data["status"]
+                )
+                session.add(statute)
+                await session.flush()
+            else:
+                statute_id = existing_statute.id
+
+            sec_res = await session.execute(
+                select(LegalSection).where(LegalSection.statute_id == statute_id)
+            )
+            existing_sec_map = {s.section_number: s for s in sec_res.scalars().all()}
 
             for sec_data in stat_data["sections"]:
-                sec_id = str(uuid.uuid4())
-                sec = LegalSection(
-                    id=sec_id,
-                    statute_id=statute_id,
-                    section_number=sec_data["section_number"],
-                    section_title=sec_data["section_title"],
-                    content=sec_data["content"],
-                    explanation_text=sec_data["explanation_text"],
-                    status="CURRENT",
-                    qdrant_point_id=sec_id
-                )
-                session.add(sec)
+                sec_num = sec_data["section_number"]
+                if sec_num in existing_sec_map:
+                    sec_id = existing_sec_map[sec_num].id
+                else:
+                    sec_id = str(uuid.uuid4())
+                    sec = LegalSection(
+                        id=sec_id,
+                        statute_id=statute_id,
+                        section_number=sec_num,
+                        section_title=sec_data["section_title"],
+                        content=sec_data["content"],
+                        explanation_text=sec_data["explanation_text"],
+                        status="CURRENT",
+                        qdrant_point_id=sec_id
+                    )
+                    session.add(sec)
 
                 # Prepare search text for embedding
                 search_text = f"[{stat_data['act_name']}, {stat_data['act_year']} | {sec_data['section_number']}: {sec_data['section_title']}]: {sec_data['content']} {sec_data.get('explanation_text', '')}"
@@ -287,24 +306,31 @@ async def seed_indian_legal_corpus():
                 })
 
         # ----------------------------------------------------
-        # Seed Court Judgments
+        # Seed Court Judgments (Idempotent)
         # ----------------------------------------------------
+        judg_res = await session.execute(select(CourtJudgment))
+        existing_judg_map = {j.neutral_citation: j for j in judg_res.scalars().all()}
+
         for j_data in JUDGMENTS_SEED:
-            j_id = str(uuid.uuid4())
-            judgment = CourtJudgment(
-                id=j_id,
-                case_title=j_data["case_title"],
-                neutral_citation=j_data["neutral_citation"],
-                standard_citation=j_data["standard_citation"],
-                court_name=j_data["court_name"],
-                judgment_date=j_data["judgment_date"],
-                bench=j_data["bench"],
-                headnote=j_data["headnote"],
-                ratio_decidendi=j_data["ratio_decidendi"],
-                source_url=j_data["source_url"],
-                qdrant_point_id=j_id
-            )
-            session.add(judgment)
+            nc = j_data["neutral_citation"]
+            if nc in existing_judg_map:
+                j_id = existing_judg_map[nc].id
+            else:
+                j_id = str(uuid.uuid4())
+                judgment = CourtJudgment(
+                    id=j_id,
+                    case_title=j_data["case_title"],
+                    neutral_citation=nc,
+                    standard_citation=j_data["standard_citation"],
+                    court_name=j_data["court_name"],
+                    judgment_date=j_data["judgment_date"],
+                    bench=j_data["bench"],
+                    headnote=j_data["headnote"],
+                    ratio_decidendi=j_data["ratio_decidendi"],
+                    source_url=j_data["source_url"],
+                    qdrant_point_id=j_id
+                )
+                session.add(judgment)
 
             search_text = f"[{j_data['court_name']} | {j_data['case_title']} ({j_data['neutral_citation']})]: {j_data['headnote']} Principle: {j_data['ratio_decidendi']}"
             qdrant_points.append({
@@ -323,7 +349,7 @@ async def seed_indian_legal_corpus():
             })
 
         await session.commit()
-        print(f"-> Successfully saved {len(STATUTES_SEED)} statutes and {len(JUDGMENTS_SEED)} judgments to PostgreSQL.")
+        print(f"-> PostgreSQL sync complete ({len(STATUTES_SEED)} statutes and {len(JUDGMENTS_SEED)} judgments synchronized).")
 
     # ----------------------------------------------------
     # Embed and Upsert to Qdrant

@@ -1,3 +1,4 @@
+import os
 import instructor
 from openai import AsyncOpenAI
 from anthropic import AsyncAnthropic
@@ -28,16 +29,23 @@ class LLMRouter:
         self._instructor_groq = None
         self._anthropic_client = None
         self._instructor_anthropic = None
-        self._langfuse_enabled = bool(settings.LANGFUSE_SECRET_KEY) and LANGFUSE_AVAILABLE
         
+        # Only enable Langfuse if both public and secret keys are non-empty
+        self._langfuse_enabled = bool(
+            settings.LANGFUSE_PUBLIC_KEY and 
+            settings.LANGFUSE_SECRET_KEY and 
+            LANGFUSE_AVAILABLE
+        )
         if self._langfuse_enabled:
+            os.environ["LANGFUSE_PUBLIC_KEY"] = settings.LANGFUSE_PUBLIC_KEY
+            os.environ["LANGFUSE_SECRET_KEY"] = settings.LANGFUSE_SECRET_KEY
+            os.environ["LANGFUSE_HOST"] = settings.LANGFUSE_HOST
             logger.info("Langfuse tracing enabled for Legal Contract Analyzer")
 
     @property
     def openai(self) -> AsyncOpenAI:
         if self._openai_client is None:
             if self._langfuse_enabled and AsyncOpenAILangfuse is not None:
-                # Use Langfuse-wrapped OpenAI client for automatic tracing
                 self._openai_client = AsyncOpenAILangfuse(
                     api_key=settings.OPENAI_API_KEY or "dummy-key"
                 )
@@ -49,16 +57,10 @@ class LLMRouter:
     def groq(self) -> AsyncOpenAI:
         """Groq client (OpenAI-compatible API)"""
         if self._groq_client is None:
-            if self._langfuse_enabled and AsyncOpenAILangfuse is not None:
-                self._groq_client = AsyncOpenAILangfuse(
-                    api_key=settings.GROQ_API_KEY or "dummy-key",
-                    base_url="https://api.groq.com/openai/v1"
-                )
-            else:
-                self._groq_client = AsyncOpenAI(
-                    api_key=settings.GROQ_API_KEY or "dummy-key",
-                    base_url="https://api.groq.com/openai/v1"
-                )
+            self._groq_client = AsyncOpenAI(
+                api_key=settings.GROQ_API_KEY or "dummy-key",
+                base_url="https://api.groq.com/openai/v1"
+            )
         return self._groq_client
 
     @property
@@ -85,23 +87,65 @@ class LLMRouter:
             self._instructor_anthropic = instructor.from_anthropic(self.anthropic)
         return self._instructor_anthropic
 
-    def get_structured_client(self, preferred_provider: str = "openai"):
+    def get_structured_client(self, preferred_provider: str = "groq"):
         """Returns instructor client based on configured keys and preference.
-        Priority: OpenAI → Groq → Anthropic
+        Priority: Groq (fast & active) → OpenAI → Anthropic
         """
-        # OpenAI is the primary provider for structured output (Instructor works best)
+        # Groq as primary fast LLM inference provider
+        if settings.GROQ_API_KEY:
+            return self.instructor_groq, settings.DEFAULT_REASONING_LLM
+
+        # OpenAI fallback
         if settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("sk-your"):
             return self.instructor_openai, settings.DEFAULT_FAST_LLM
-
-        # Groq as fast free-tier fallback (excellent for structured output)
-        if settings.GROQ_API_KEY:
-            return self.instructor_groq, "llama-3.3-70b-versatile"
 
         # Last resort: Anthropic
         if settings.ANTHROPIC_API_KEY:
             return self.instructor_anthropic, "claude-3-haiku-20240307"
 
-        raise ValueError("No LLM API keys configured. Please set OPENAI_API_KEY, GROQ_API_KEY, or ANTHROPIC_API_KEY")
+        raise ValueError("No LLM API keys configured. Please set GROQ_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY")
+
+    async def generate_chat_completion(
+        self,
+        messages: list,
+        temperature: float = 0.1,
+        max_tokens: int = 1500
+    ) -> str:
+        """
+        Robust multi-provider chat completion:
+        1. Tries Groq (Active free-tier with qwen/qwen3.8-27b)
+        2. Tries OpenAI (if configured and quota available)
+        3. Raises exception to trigger domain fallback
+        """
+        # 1. Try Groq
+        if settings.GROQ_API_KEY:
+            try:
+                res = await self.groq.chat.completions.create(
+                    model=settings.DEFAULT_REASONING_LLM,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens
+                )
+                if res.choices and res.choices[0].message.content:
+                    return res.choices[0].message.content
+            except Exception as e:
+                logger.warning(f"Groq chat completion attempt failed: {e}. Trying fallback...")
+
+        # 2. Try OpenAI
+        if settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("sk-your"):
+            try:
+                res = await self.openai.chat.completions.create(
+                    model=settings.DEFAULT_FAST_LLM,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens
+                )
+                if res.choices and res.choices[0].message.content:
+                    return res.choices[0].message.content
+            except Exception as e:
+                logger.warning(f"OpenAI chat completion attempt failed: {e}")
+
+        raise RuntimeError("All active LLM providers failed or returned empty responses.")
 
 llm_router = LLMRouter()
 
