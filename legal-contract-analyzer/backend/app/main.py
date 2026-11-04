@@ -183,4 +183,32 @@ async def trigger_manual_cleanup(
     report = await guest_cleanup_service.run_cleanup(db)
     return report
 
+# Serve production frontend Single Page Application (SPA) if dist directory exists
+_dist_candidates = [
+    os.path.join(_backend_dir, "../frontend/dist"),
+    os.path.join(_backend_dir, "frontend/dist"),
+    os.path.join(_backend_dir, "dist"),
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../frontend/dist")),
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "../../dist")),
+]
+_frontend_dist = next((cand for cand in _dist_candidates if os.path.exists(cand) and os.path.exists(os.path.join(cand, "index.html"))), None)
+
+if _frontend_dist:
+    logger.info(f"Serving production frontend SPA from {_frontend_dist}")
+    _assets_dir = os.path.join(_frontend_dist, "assets")
+    if os.path.exists(_assets_dir):
+        app.mount("/assets", StaticFiles(directory=_assets_dir), name="spa_assets")
+
+    from fastapi.responses import FileResponse
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        if full_path.startswith("api") or full_path in ("health", "docs", "redoc", "openapi.json"):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Not Found")
+        target_file = os.path.join(_frontend_dist, full_path)
+        if os.path.exists(target_file) and os.path.isfile(target_file):
+            return FileResponse(target_file)
+        return FileResponse(os.path.join(_frontend_dist, "index.html"))
+
+
 
