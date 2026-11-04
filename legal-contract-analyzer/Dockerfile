@@ -42,10 +42,11 @@ COPY --from=frontend-builder /build/dist /app/frontend/dist
 # Create uploads directory
 RUN mkdir -p /app/backend/uploads /app/uploads
 
+ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app/backend
-ENV PORT=8000
-EXPOSE 8000
+ENV PORT=10000
+EXPOSE 10000
 
 WORKDIR /app/backend
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WEB_CONCURRENCY:-1}"]
+CMD ["sh", "-c", "echo 'Binding to port '${PORT:-10000} && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000} --workers 1"]
 
