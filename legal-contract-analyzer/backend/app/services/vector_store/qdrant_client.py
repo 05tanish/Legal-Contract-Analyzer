@@ -4,21 +4,34 @@ from app.core.config import settings
 from typing import List, Dict, Any, Optional
 import logging
 
+import os
+
 logger = logging.getLogger(__name__)
 
 class QdrantService:
     def __init__(self):
         self.contract_collection = settings.QDRANT_COLLECTION_NAME
         self.legal_collection = settings.QDRANT_LEGAL_COLLECTION_NAME
+        
+        is_cloud = bool(os.environ.get("RENDER") or os.environ.get("PORT") or os.environ.get("ENVIRONMENT") == "production")
+        is_localhost = "localhost" in settings.QDRANT_URL or "127.0.0.1" in settings.QDRANT_URL
+
+        if is_cloud and is_localhost and not settings.QDRANT_API_KEY:
+            logger.info("Cloud environment detected with local Qdrant URL. Initializing in-memory Qdrant vector store...")
+            self.client = QdrantClient(":memory:")
+            self._ensure_collections_exist()
+            return
+
         try:
             if settings.QDRANT_API_KEY:
-                self.client = QdrantClient(url=settings.QDRANT_URL, api_key=settings.QDRANT_API_KEY)
+                self.client = QdrantClient(url=settings.QDRANT_URL, api_key=settings.QDRANT_API_KEY, timeout=5)
             else:
-                self.client = QdrantClient(url=settings.QDRANT_URL)
+                self.client = QdrantClient(url=settings.QDRANT_URL, timeout=5)
+            self.client.get_collections()
             self._ensure_collections_exist()
+            logger.info(f"Connected to Qdrant cluster at {settings.QDRANT_URL}")
         except Exception as e:
-            logger.warning(f"Could not connect to Qdrant at {settings.QDRANT_URL}: {e}. Local in-memory fallback will be used.")
-            # In-memory client for local dev/testing if docker container is not running yet
+            logger.warning(f"Could not connect to Qdrant at {settings.QDRANT_URL}: {e}. Switching to in-memory Qdrant vector store.")
             self.client = QdrantClient(":memory:")
             self._ensure_collections_exist()
 
@@ -76,6 +89,7 @@ class QdrantService:
 
         except Exception as e:
             logger.error(f"Error checking/creating Qdrant collections: {e}")
+            raise
 
     # ----------------------------------------------------
     # Private Contract Operations

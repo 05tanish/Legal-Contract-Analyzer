@@ -73,21 +73,13 @@ async def lifespan(app: FastAPI):
     # Startup: ensure tables exist and directories exist
     logger.info("Initializing Legal Contract Analyzer services...")
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        try:
-            from sqlalchemy import text
-            await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS cloudinary_url VARCHAR(1024);"))
-            await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS cloudinary_public_id VARCHAR(255);"))
-            await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS user_id VARCHAR(36);"))
-            await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS is_guest BOOLEAN DEFAULT FALSE;"))
-            await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS guest_session_id VARCHAR(64);"))
-            await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;"))
-            await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS cleanup_status VARCHAR(30) DEFAULT 'NONE';"))
-            await conn.execute(text("ALTER TABLE contracts ADD COLUMN IF NOT EXISTS cleanup_retries INTEGER DEFAULT 0;"))
-        except Exception as e:
-            logger.debug(f"Schema check note: {e}")
-    logger.info("Database tables initialized successfully.")
+
+    # Initialize database with automatic fallback
+    try:
+        from app.db.session import init_db
+        await init_db()
+    except Exception as e:
+        logger.error(f"Database initialization non-fatal warning: {e}")
 
     # Start periodic guest contract cleanup background task
     cleanup_task = asyncio.create_task(periodic_guest_cleanup_worker())
@@ -123,7 +115,11 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
 
-    await engine.dispose()
+    try:
+        from app.db.session import engine
+        await engine.dispose()
+    except Exception:
+        pass
     logger.info("Database connection closed.")
 
 app = FastAPI(
