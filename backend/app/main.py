@@ -106,21 +106,25 @@ async def lifespan(app: FastAPI):
 
     # Start background workers (non-blocking!)
     cleanup_task = asyncio.create_task(periodic_guest_cleanup_worker())
-    seed_task = asyncio.create_task(background_seed_worker())
+    seed_task = None
+    if os.environ.get("AUTO_SEED", "").lower() in ("true", "1"):
+        seed_task = asyncio.create_task(background_seed_worker())
 
     yield
 
     # Shutdown
     cleanup_task.cancel()
-    seed_task.cancel()
+    if seed_task:
+        seed_task.cancel()
     try:
         await cleanup_task
     except asyncio.CancelledError:
         pass
-    try:
-        await seed_task
-    except asyncio.CancelledError:
-        pass
+    if seed_task:
+        try:
+            await seed_task
+        except asyncio.CancelledError:
+            pass
 
     try:
         from app.db.session import engine
@@ -189,6 +193,7 @@ async def trigger_manual_cleanup(
 
 # Serve production frontend Single Page Application (SPA) if dist directory exists
 _dist_candidates = [
+    "/app/frontend/dist",
     os.path.join(_backend_dir, "../frontend/dist"),
     os.path.join(_backend_dir, "frontend/dist"),
     os.path.join(_backend_dir, "dist"),
@@ -213,6 +218,17 @@ if _frontend_dist:
         if os.path.exists(target_file) and os.path.isfile(target_file):
             return FileResponse(target_file)
         return FileResponse(os.path.join(_frontend_dist, "index.html"))
+else:
+    from fastapi.responses import JSONResponse
+    @app.get("/", include_in_schema=False)
+    async def root_fallback():
+        return JSONResponse({
+            "status": "online",
+            "service": settings.PROJECT_NAME,
+            "version": "2.0.0",
+            "docs": "/docs",
+            "health": "/health"
+        })
 
 
 
