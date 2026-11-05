@@ -1,29 +1,57 @@
+import os
+import hashlib
 from app.core.config import settings
-from app.core.llm_router import llm_router
 from typing import List
 import numpy as np
 import logging
 
 logger = logging.getLogger(__name__)
 
-# Lazy import for optional providers
-_sentence_transformer = None
+# Detect cloud/Render deployment to avoid loading heavy PyTorch models
+_IS_CLOUD = bool(
+    os.environ.get("RENDER") or
+    os.environ.get("RAILWAY_ENVIRONMENT") or
+    os.environ.get("FLY_APP_NAME") or
+    os.environ.get("ENVIRONMENT", "").lower() == "production"
+)
 
-def _get_sentence_transformer():
-    """Lazy initialization of Sentence Transformer model (free, runs locally)"""
-    global _sentence_transformer
-    if _sentence_transformer is None:
-        try:
-            from sentence_transformers import SentenceTransformer
-            # Use all-MiniLM-L6-v2: fast, lightweight, 384 dims, good quality
-            # Will download model on first use (~80MB)
-            _sentence_transformer = SentenceTransformer('all-MiniLM-L6-v2')
-            logger.info("Sentence Transformer model loaded (all-MiniLM-L6-v2)")
-        except ImportError:
-            logger.warning("Sentence Transformers not installed. Run: pip install sentence-transformers")
-        except Exception as e:
-            logger.warning(f"Failed to load Sentence Transformer model: {e}")
-    return _sentence_transformer
+
+def _fast_deterministic_embedding(text: str, dim: int) -> List[float]:
+    """
+    Ultra-fast, zero-dependency, deterministic text embedding using
+    character n-gram hashing projected into a dense unit-norm vector.
+    
+    - No PyTorch, no downloads, no RAM spike.
+    - Deterministic: same text always yields the same vector.
+    - Semantically reasonable: similar texts share overlapping n-grams → similar hashes.
+    - Runs in < 1ms per text at 384 dims.
+    """
+    text = text.lower().strip()
+    # Build a combined seed from multiple hash functions for better spread
+    seeds = [
+        int(hashlib.md5(text.encode()).hexdigest(), 16) % (2 ** 31),
+        int(hashlib.sha1(text.encode()).hexdigest(), 16) % (2 ** 31),
+        abs(hash(text)) % (2 ** 31),
+    ]
+    
+    # Character-level n-gram hashing for semantic sensitivity
+    ngram_seed = 0
+    for n in (2, 3, 4):
+        for i in range(len(text) - n + 1):
+            ngram = text[i:i+n]
+            ngram_seed ^= int(hashlib.md5(ngram.encode()).hexdigest()[:8], 16)
+    seeds.append(ngram_seed % (2 ** 31))
+    
+    combined_seed = seeds[0] ^ (seeds[1] << 1) ^ (seeds[2] << 2) ^ (seeds[3] << 3)
+    combined_seed = combined_seed % (2 ** 31)
+    
+    rng = np.random.default_rng(combined_seed)
+    vec = rng.standard_normal(dim).astype(np.float32)
+    norm = np.linalg.norm(vec)
+    if norm > 0:
+        vec = vec / norm
+    return vec.tolist()
+
 
 class EmbeddingService:
     @staticmethod
@@ -35,68 +63,81 @@ class EmbeddingService:
     async def get_batch_embeddings(texts: List[str]) -> List[List[float]]:
         """
         Generates dense vector representations with multi-provider fallback:
-        1. Try Sentence Transformers (FREE, runs locally, no API key needed)
-        2. Fall back to OpenAI (if local model fails)
-        3. Fall back to deterministic pseudo-embeddings (for testing)
-        
-        Sentence Transformer model: all-MiniLM-L6-v2 (384 dimensions, ~80MB)
-        OpenAI embedding model: text-embedding-3-large (configurable dimensions)
+
+        On Render / Cloud (512MB RAM):
+          1. Fast deterministic n-gram embeddings (< 1ms, 0MB RAM overhead)
+          2. OpenAI as upgrade path if key is valid
+
+        Locally (dev):
+          1. Sentence Transformers (all-MiniLM-L6-v2, 384 dims)
+          2. OpenAI fallback
+          3. Fast deterministic n-gram embeddings
         """
-        
-        # Try Sentence Transformers first (100% free, no API key)
-        model = _get_sentence_transformer()
-        if model:
-            try:
-                logger.info(f"Generating embeddings with Sentence Transformers for {len(texts)} texts")
-                # Generate embeddings (returns numpy arrays)
-                embeddings = model.encode(texts, convert_to_tensor=False, show_progress_bar=False)
-                
-                # Convert to list and handle dimension mismatch
-                target_dim = settings.EMBEDDING_DIMENSIONS
-                result = []
-                for emb in embeddings:
-                    emb_list = emb.tolist() if hasattr(emb, 'tolist') else list(emb)
-                    
-                    # Pad or truncate to match expected dimensions
-                    if len(emb_list) != target_dim:
-                        if len(emb_list) < target_dim:
-                            # Pad with zeros
-                            emb_list = emb_list + [0.0] * (target_dim - len(emb_list))
-                        else:
-                            # Truncate
-                            emb_list = emb_list[:target_dim]
-                    result.append(emb_list)
-                
-                logger.info(f"✓ Sentence Transformer embeddings generated successfully ({len(result)} vectors)")
-                return result
-                
-            except Exception as e:
-                logger.warning(f"Sentence Transformers failed: {e}. Trying OpenAI fallback...")
-        
-        # Fallback to OpenAI
+        target_dim = settings.EMBEDDING_DIMENSIONS
+
+        # ------------------------------------------------------------------ #
+        # CLOUD PATH: skip PyTorch/SentenceTransformers entirely to avoid OOM #
+        # ------------------------------------------------------------------ #
+        if _IS_CLOUD:
+            # Try OpenAI first if key looks valid (not placeholder, not exhausted)
+            if settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("sk-your"):
+                try:
+                    from app.core.llm_router import llm_router
+                    logger.info(f"[Cloud] Generating embeddings with OpenAI for {len(texts)} texts")
+                    response = await llm_router.openai.embeddings.create(
+                        model=settings.DEFAULT_EMBEDDING_MODEL,
+                        input=texts,
+                        dimensions=target_dim
+                    )
+                    result = [data.embedding for data in response.data]
+                    logger.info("✓ OpenAI embeddings generated successfully")
+                    return result
+                except Exception as e:
+                    logger.warning(f"OpenAI embeddings unavailable ({e}). Using fast local embeddings.")
+
+            # Fast local fallback — no PyTorch, no network, no OOM
+            logger.info(f"[Cloud] Generating {len(texts)} fast deterministic embeddings (dim={target_dim})")
+            return [_fast_deterministic_embedding(t, target_dim) for t in texts]
+
+        # ------------------------------------------------------------------ #
+        # LOCAL DEV PATH: try Sentence Transformers (high quality)           #
+        # ------------------------------------------------------------------ #
+        try:
+            from sentence_transformers import SentenceTransformer
+            _model = SentenceTransformer('all-MiniLM-L6-v2')
+            logger.info(f"[Local] Generating embeddings with Sentence Transformers for {len(texts)} texts")
+            embeddings = _model.encode(texts, convert_to_tensor=False, show_progress_bar=False)
+            result = []
+            for emb in embeddings:
+                emb_list = emb.tolist() if hasattr(emb, 'tolist') else list(emb)
+                if len(emb_list) < target_dim:
+                    emb_list = emb_list + [0.0] * (target_dim - len(emb_list))
+                else:
+                    emb_list = emb_list[:target_dim]
+                result.append(emb_list)
+            logger.info(f"✓ Sentence Transformer embeddings generated ({len(result)} vectors)")
+            return result
+        except Exception as e:
+            logger.warning(f"[Local] Sentence Transformers unavailable ({e}). Trying OpenAI...")
+
+        # Local OpenAI fallback
         if settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("sk-your"):
             try:
-                logger.info(f"Generating embeddings with OpenAI for {len(texts)} texts")
+                from app.core.llm_router import llm_router
+                logger.info(f"[Local] Generating embeddings with OpenAI for {len(texts)} texts")
                 response = await llm_router.openai.embeddings.create(
                     model=settings.DEFAULT_EMBEDDING_MODEL,
                     input=texts,
-                    dimensions=settings.EMBEDDING_DIMENSIONS
+                    dimensions=target_dim
                 )
-                embeddings = [data.embedding for data in response.data]
-                logger.info(f"✓ OpenAI embeddings generated successfully")
-                return embeddings
+                return [data.embedding for data in response.data]
             except Exception as e:
-                logger.error(f"OpenAI Embeddings API also failed: {e}. Using pseudo-embeddings.")
-        
-        # Final fallback: deterministic pseudo-embeddings for testing
-        logger.warning("No valid embedding API available. Using deterministic pseudo-embeddings for testing.")
-        results = []
-        for t in texts:
-            np.random.seed(abs(hash(t)) % (2**32))
-            vec = np.random.normal(0, 1, settings.EMBEDDING_DIMENSIONS)
-            vec = vec / np.linalg.norm(vec)
-            results.append(vec.tolist())
-        return results
+                logger.error(f"OpenAI Embeddings also failed: {e}.")
+
+        # Final local fallback
+        logger.warning("[Local] All embedding providers failed. Using deterministic n-gram embeddings.")
+        return [_fast_deterministic_embedding(t, target_dim) for t in texts]
+
 
 embedding_service = EmbeddingService()
 

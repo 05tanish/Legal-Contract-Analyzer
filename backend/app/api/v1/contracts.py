@@ -68,11 +68,15 @@ async def upload_contract(
     )
 
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-    file_path = os.path.abspath(os.path.join(settings.UPLOAD_DIR, file.filename))
+    # Sanitize filename to avoid path traversal and special char issues
+    safe_filename = re.sub(r'[^a-zA-Z0-9_.\-]', '_', file.filename)
+    file_path = os.path.abspath(os.path.join(settings.UPLOAD_DIR, safe_filename))
+
+    # Read file bytes once into memory
+    content = await file.read()
 
     # Save uploaded file locally
     async with aiofiles.open(file_path, "wb") as buffer:
-        content = await file.read()
         await buffer.write(content)
 
     # 2. Parse document structure using layout-aware parser
@@ -85,7 +89,7 @@ async def upload_contract(
             detail="We were unable to read this PDF document. Please make sure the file is not password-protected or corrupted."
         )
 
-    # 3. Create Contract DB record
+    # 3. Create Contract DB record (status=PROCESSING until fully saved)
     contract = Contract(
         filename=file.filename,
         file_path=file_path,
@@ -102,25 +106,47 @@ async def upload_contract(
     await db.commit()
     await db.refresh(contract)
 
-    # 4. Chunk document using Hierarchical Chunker
+    # 4. Cloudinary upload FIRST - before heavy embedding so PDF is persisted
+    #    even if the container gets OOM-killed during embedding.
+    try:
+        clean_name = re.sub(r'[^a-zA-Z0-9_.\-]', '_', file.filename)
+        public_id = f"{contract.id}_{os.path.splitext(clean_name)[0]}"
+        cloud_info = await cloudinary_service.upload_document(
+            file_path=file_path,
+            public_id=public_id,
+            folder="guest_contracts" if is_guest_upload else "contracts"
+        )
+        if cloud_info:
+            contract.cloudinary_url = cloud_info.get("secure_url")
+            contract.cloudinary_public_id = cloud_info.get("public_id")
+            await db.commit()
+            logger.info(f"Contract {contract.id} stored in Cloudinary: {contract.cloudinary_url}")
+    except Exception as e:
+        logger.warning(f"Cloudinary upload non-blocking note: {e}")
+
+    # 5. Chunk document using Hierarchical Chunker
     chunker = HierarchicalChunker()
     chunks_data = chunker.chunk_document(contract_id=contract.id, pages=parsed_doc["pages"])
 
-    # 5. Embed child chunks & upsert to Qdrant
-    child_chunks = [c for c in chunks_data if not c.get("is_parent", False)]
-    if child_chunks:
-        search_texts = [c.get("search_content", c["content"]) for c in child_chunks]
-        embeddings = await embedding_service.get_batch_embeddings(search_texts)
-        
-        qdrant_points = []
-        for c, emb in zip(child_chunks, embeddings):
-            c_copy = c.copy()
-            c_copy["vector"] = emb
-            qdrant_points.append(c_copy)
-        
-        qdrant_service.upsert_chunks(qdrant_points)
+    # 6. Embed child chunks & upsert to Qdrant (non-fatal - contract saves READY regardless)
+    try:
+        child_chunks = [c for c in chunks_data if not c.get("is_parent", False)]
+        if child_chunks:
+            search_texts = [c.get("search_content", c["content"]) for c in child_chunks]
+            embeddings = await embedding_service.get_batch_embeddings(search_texts)
 
-    # 6. Save chunk records to relational DB
+            qdrant_points = []
+            for c, emb in zip(child_chunks, embeddings):
+                c_copy = c.copy()
+                c_copy["vector"] = emb
+                qdrant_points.append(c_copy)
+
+            qdrant_service.upsert_chunks(qdrant_points)
+            logger.info(f"Indexed {len(qdrant_points)} vectors into Qdrant for contract {contract.id}")
+    except Exception as e:
+        logger.error(f"Non-fatal: embedding/Qdrant failed for {contract.id}: {e}. Contract still saved.")
+
+    # 7. Save chunk records to relational DB
     db_chunks = [
         ContractChunk(
             id=c["id"],
@@ -136,22 +162,6 @@ async def upload_contract(
         for c in chunks_data
     ]
     db.add_all(db_chunks)
-
-    # 7. Cloudinary Storage Integration: Upload PDF to Cloudinary
-    try:
-        clean_name = re.sub(r'[^a-zA-Z0-9_\.-]', '_', file.filename)
-        public_id = f"{contract.id}_{os.path.splitext(clean_name)[0]}"
-        cloud_info = await cloudinary_service.upload_document(
-            file_path=file_path,
-            public_id=public_id,
-            folder="guest_contracts" if is_guest_upload else "contracts"
-        )
-        if cloud_info:
-            contract.cloudinary_url = cloud_info.get("secure_url")
-            contract.cloudinary_public_id = cloud_info.get("public_id")
-            logger.info(f"Contract {contract.id} stored in Cloudinary: {contract.cloudinary_url}")
-    except Exception as e:
-        logger.warning(f"Cloudinary storage sync non-blocking note: {e}")
 
     contract.status = "READY"
     await db.commit()
@@ -169,6 +179,7 @@ async def upload_contract(
     }
 
     return contract
+
 
 @router.get("", response_model=List[ContractResponse])
 async def list_contracts(
@@ -260,6 +271,7 @@ async def get_contract_pdf(
         validate_contract_access(fake_contract, current_user, guest_session_id)
         cached_file = cached.get("file_path")
         cached_name = cached.get("filename", "contract.pdf")
+        cached_cloudinary = cached.get("cloudinary_url")
         if cached_file and os.path.exists(cached_file):
             return FileResponse(
                 cached_file,
@@ -272,6 +284,10 @@ async def get_contract_pdf(
                     "X-Content-Type-Options": "nosniff"
                 }
             )
+        elif cached_cloudinary:
+            # Local file missing (container restart) — redirect to Cloudinary instantly
+            return RedirectResponse(url=cached_cloudinary, status_code=302)
+        # else fall through to DB query below
 
     # 2. Query DB if not cached
     result = await db.execute(select(Contract).where(Contract.id == contract_id))
@@ -283,6 +299,7 @@ async def get_contract_pdf(
     validate_contract_access(contract, current_user, guest_session_id)
 
     file_path = contract.file_path
+    # Try to resolve local file path first
     if not os.path.exists(file_path):
         basename = os.path.basename(file_path)
         candidates = [
@@ -290,21 +307,19 @@ async def get_contract_pdf(
             os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../uploads", basename)),
             os.path.abspath(os.path.join(os.path.dirname(__file__), "../../uploads", basename)),
         ]
+        found_local = False
         for cand in candidates:
             if os.path.exists(cand):
                 file_path = cand
+                found_local = True
                 break
-        else:
-            # Check Cloudinary cloud backup
+        # If file is not on disk, redirect instantly to Cloudinary (no slow download)
+        if not found_local:
             if contract.cloudinary_url:
-                local_cache = os.path.join(settings.UPLOAD_DIR, f"{contract.id}_{contract.filename}")
-                downloaded = await cloudinary_service.download_file(contract.cloudinary_url, local_cache)
-                if downloaded and os.path.exists(local_cache):
-                    file_path = local_cache
-                else:
-                    return RedirectResponse(url=contract.cloudinary_url)
+                logger.info(f"Local file missing for {contract.id}, redirecting to Cloudinary")
+                return RedirectResponse(url=contract.cloudinary_url, status_code=302)
             else:
-                raise HTTPException(status_code=404, detail="The requested document file could not be found.")
+                raise HTTPException(status_code=404, detail="The requested document file could not be found. Please re-upload the contract.")
 
     # Update cache
     _contract_cache[contract.id] = {
@@ -328,6 +343,7 @@ async def get_contract_pdf(
             "X-Content-Type-Options": "nosniff"
         }
     )
+
 
 @router.post("/{contract_id}/detect-clauses")
 async def detect_contract_clauses(
