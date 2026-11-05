@@ -29,7 +29,8 @@ langgraph>=0.2.34
 langchain-core>=0.3.7
 instructor>=1.5.0
 openai>=1.51.0
-anthropic>=0.36.0
+# anthropic replaced with gemini (uses openai SDK compatible endpoint)
+# anthropic>=0.36.0
 
 # Embeddings: sentence-transformers requires PyTorch (~1.5GB) which causes OOM
 # on Render Free Tier (512MB RAM). It is NOT installed in production.

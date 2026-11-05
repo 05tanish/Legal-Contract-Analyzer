@@ -15,8 +15,8 @@ async def extractor_node(state: ContractAuditState):
     retrieved_contexts = state.get("retrieved_contexts", {})
     extracted_findings = []
 
-    # Check if real LLM API keys are active (Groq, OpenAI, Anthropic)
-    has_api_keys = bool(settings.GROQ_API_KEY) or bool(settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("sk-your")) or bool(settings.ANTHROPIC_API_KEY)
+    # Check if real LLM API keys are active (Groq, OpenAI, Gemini)
+    has_api_keys = bool(settings.GROQ_API_KEY) or bool(settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("sk-your")) or bool(settings.GEMINI_API_KEY)
 
     if has_api_keys:
         try:
