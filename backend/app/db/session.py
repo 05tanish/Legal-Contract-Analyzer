@@ -98,7 +98,7 @@ async def init_db():
     """Initializes tables on startup with zero-crash SQLite fallback."""
     global engine
     try:
-        async with asyncio.timeout(5):
+        async with asyncio.timeout(12):
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
                 try:

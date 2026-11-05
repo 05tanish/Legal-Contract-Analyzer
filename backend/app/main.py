@@ -30,7 +30,7 @@ if 'packaging' not in sys.modules:
             except Exception:
                 pass
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
@@ -151,9 +151,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Intercept and answer HEAD health checks (Render, AWS, cloud load balancers)
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
+
+class HeadMethodMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        if request.method == "HEAD":
+            path = request.url.path
+            if path in ("/", "/health", f"{settings.API_V1_PREFIX}/health") or path.startswith("/assets"):
+                return Response(status_code=200, media_type="text/html")
+        return await call_next(request)
+
+app.add_middleware(HeadMethodMiddleware)
+
 # Health Check
-@app.get("/health", tags=["System"])
-@app.get(f"{settings.API_V1_PREFIX}/health", tags=["System"])
+@app.api_route("/health", methods=["GET", "HEAD"], tags=["System"])
+@app.api_route(f"{settings.API_V1_PREFIX}/health", methods=["GET", "HEAD"], tags=["System"])
 async def health_check():
     return {
         "status": "healthy",
@@ -209,19 +223,23 @@ if _frontend_dist:
         app.mount("/assets", StaticFiles(directory=_assets_dir), name="spa_assets")
 
     from fastapi.responses import FileResponse
-    @app.get("/{full_path:path}", include_in_schema=False)
-    async def serve_spa(full_path: str):
+    @app.api_route("/{full_path:path}", methods=["GET", "HEAD"], include_in_schema=False)
+    async def serve_spa(request: Request, full_path: str):
         if full_path.startswith("api") or full_path in ("health", "docs", "redoc", "openapi.json"):
             from fastapi import HTTPException
             raise HTTPException(status_code=404, detail="Not Found")
+        if request.method == "HEAD":
+            return Response(status_code=200, media_type="text/html")
         target_file = os.path.join(_frontend_dist, full_path)
         if os.path.exists(target_file) and os.path.isfile(target_file):
             return FileResponse(target_file)
         return FileResponse(os.path.join(_frontend_dist, "index.html"))
 else:
     from fastapi.responses import JSONResponse
-    @app.get("/", include_in_schema=False)
-    async def root_fallback():
+    @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
+    async def root_fallback(request: Request):
+        if request.method == "HEAD":
+            return Response(status_code=200, media_type="application/json")
         return JSONResponse({
             "status": "online",
             "service": settings.PROJECT_NAME,
